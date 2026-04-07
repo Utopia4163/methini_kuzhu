@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a0a08">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Parai Kuzhu – Attendance</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --red:     #c0392b;
+      --orange:  #e67e22;
+      --green:   #27ae60;
+      --bg:      #160806;
+      --surface: #241008;
+      --card:    #2d1510;
+      --border:  #5a2418;
+      --text:    #f5e6d3;
+      --muted:   #a07050;
+      --faint:   #604030;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .pk-header {
+      text-align: center;
+      padding: 2.25rem 1rem 0.75rem;
+      flex-shrink: 0;
+    }
+    .pk-drum     { font-size: 3rem; line-height: 1; margin-bottom: 0.4rem; }
+    .pk-title    { font-size: 1.75rem; font-weight: 800; color: var(--orange); letter-spacing: 0.5px; margin: 0; }
+    .pk-subtitle { font-size: 0.85rem; color: var(--muted); margin: 0.2rem 0 0; }
+
+    /* ── Main ── */
+    .pk-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      gap: 0;
+    }
+
+    /* ── State system ── */
+    .pk-state            { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 400px; }
+    .pk-state.pk-active  { display: flex; }
+
+    /* ── Spinner ── */
+    .pk-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.12);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Member card ── */
+    .pk-card {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .pk-avatar {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      background: var(--red);
+      color: #fff;
+      font-size: 1.6rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.75rem;
+      letter-spacing: -1px;
+    }
+    .pk-name  { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .pk-role  { font-size: 0.9rem; color: var(--orange); }
+
+    /* ── Location pill ── */
+    .pk-location {
+      display: none;                 /* shown via JS if ?location param present */
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 1.1rem;
+    }
+
+    /* ── Action button ── */
+    .pk-btn {
+      width: 100%;
+      padding: 1.15rem 2rem;
+      border: none;
+      border-radius: 18px;
+      background: var(--red);
+      color: #fff;
+      font-size: 1.2rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+      box-shadow: 0 6px 20px rgba(192,57,43,0.45);
+      animation: pulse-glow 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 6px 20px rgba(192,57,43,0.45); }
+      50%      { box-shadow: 0 8px 36px rgba(192,57,43,0.70); }
+    }
+    .pk-btn:active           { transform: scale(0.96); animation: none; }
+    .pk-btn.pk-btn-loading   { background: #6c757d; animation: none; cursor: not-allowed; }
+    .pk-btn.pk-btn-success   { background: var(--green); animation: none; box-shadow: 0 6px 20px rgba(39,174,96,0.45); }
+    .pk-btn:disabled         { pointer-events: none; }
+
+    .pk-btn-spinner {
+      width: 22px; height: 22px; flex-shrink: 0;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* ── Welcome copy (new user) ── */
+    .pk-welcome { text-align: center; margin-bottom: 1.25rem; }
+    .pk-welcome h2 { font-size: 1.4rem; color: var(--orange); margin-bottom: 0.4rem; }
+    .pk-welcome p  { font-size: 0.9rem; color: var(--muted); margin: 0; }
+
+    /* ── Success / Error ── */
+    .pk-big-icon { font-size: 4.5rem; line-height: 1; margin-bottom: 0.75rem; }
+    .pk-heading  { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .pk-sub      { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 320px; }
+
+    /* ── Thin link ── */
+    .pk-link { color: var(--faint); font-size: 0.78rem; margin-top: 0.9rem; text-align: center; }
+    .pk-link a { color: var(--muted); text-decoration: underline; cursor: pointer; }
+
+    /* ── Footer ── */
+    .pk-footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.72rem;
+      color: #3a2010;
+      flex-shrink: 0;
+    }
+
+    /* ── Modal dark theme ── */
+    .modal-content {
+      background: #2a130a;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      color: var(--text);
+    }
+    .modal-header   { border-bottom: 1px solid var(--border); }
+    .modal-footer   { border-top: 1px solid var(--border); }
+    .modal-title    { color: var(--orange); font-weight: 700; }
+    .btn-close      { filter: invert(1) brightness(0.6); }
+    .form-label     { color: #c09070; font-weight: 500; font-size: 0.9rem; }
+    .form-control, .form-select {
+      background: #3a1a0c;
+      border: 1px solid #6a3020;
+      color: var(--text);
+      border-radius: 10px;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #3a1a0c;
+      border-color: var(--orange);
+      color: var(--text);
+      box-shadow: 0 0 0 0.2rem rgba(230,126,34,0.22);
+    }
+    .form-control::placeholder { color: #6a4030; }
+    .form-select option         { background: #3a1a0c; color: var(--text); }
+    .form-control.is-invalid    { border-color: var(--red); }
+    .invalid-feedback           { color: #e74c3c; }
+
+    .modal-submit-btn {
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 0.65rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.2s;
+    }
+    .modal-submit-btn:hover    { background: #a93226; }
+    .modal-submit-btn:disabled { background: #6c757d; cursor: not-allowed; }
+
+    .modal-cancel-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+    }
+
+    /* ── Misc ── */
+    .text-success-green { color: var(--green); }
+    .text-orange        { color: var(--orange); }
+  </style>
+</head>
+<body>
+
+<!-- ══ HEADER ═══════════════════════════════════════════════ -->
+<header class="pk-header">
+  <div class="pk-drum">🥁</div>
+  <h1 class="pk-title">Parai Kuzhu</h1>
+  <p class="pk-subtitle">Group Attendance</p>
+</header>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════ -->
+<main class="pk-main">
+
+  <!-- ─ Loading ─ -->
+  <div id="state-loading" class="pk-state pk-active">
+    <div class="pk-spinner"></div>
+    <p style="color:var(--muted);margin-top:1rem;font-size:0.9rem;">Loading…</p>
+  </div>
+
+  <!-- ─ Returning member ─ -->
+  <div id="state-returning" class="pk-state">
+    <div class="pk-card">
+      <div class="pk-avatar" id="member-avatar">?</div>
+      <div class="pk-name"   id="member-name">…</div>
+      <div class="pk-role"   id="member-role">Member</div>
+    </div>
+
+    <div class="pk-location" id="loc-badge-ret">
+      <i class="bi bi-geo-alt-fill"></i>
+      <span id="loc-text-ret"></span>
+    </div>
+
+    <button class="pk-btn" id="btn-ret" onclick="markAttendanceReturning()">
+      <i class="bi bi-check2-circle" style="font-size:1.4rem;"></i>
+      Mark Attendance
+    </button>
+
+    <div class="pk-link">
+      Not you? <a onclick="resetMember()">Change member</a>
+    </div>
+  </div>
+
+  <!-- ─ New / first-time ─ -->
+  <div id="state-new" class="pk-state">
+    <div class="pk-welcome">
+      <h2>Welcome! 👋</h2>
+      <p>First time here? Tap the button to register<br>and mark your attendance instantly.</p>
+    </div>
+
+    <div class="pk-location" id="loc-badge-new">
+      <i class="bi bi-geo-alt-fill"></i>
+      <span id="loc-text-new"></span>
+    </div>
+
+    <button class="pk-btn" id="btn-new" onclick="showRegModal()">
+      <i class="bi bi-person-plus" style="font-size:1.4rem;"></i>
+      Register &amp; Mark Attendance
+    </button>
+  </div>
+
+  <!-- ─ Success ─ -->
+  <div id="state-success" class="pk-state" style="text-align:center;">
+    <div class="pk-big-icon">✅</div>
+    <div class="pk-heading text-success-green">Attendance Marked!</div>
+    <p class="pk-sub" id="success-msg"></p>
+    <button class="pk-btn" style="max-width:200px;margin-top:1.5rem;font-size:1rem;padding:0.8rem;"
+            onclick="goHome()">
+      Done
+    </button>
+  </div>
+
+  <!-- ─ Error ─ -->
+  <div id="state-error" class="pk-state" style="text-align:center;">
+    <div class="pk-big-icon">⚠️</div>
+    <div class="pk-heading" style="color:#e74c3c;">Something went wrong</div>
+    <p class="pk-sub" id="error-msg">Unable to connect. Please try again.</p>
+    <button class="pk-btn" style="max-width:220px;margin-top:1.5rem;font-size:1rem;padding:0.8rem;"
+            onclick="init()">
+      Try Again
+    </button>
+  </div>
+
+</main>
+
+<!-- ══ FOOTER ═════════════════════════════════════════════════ -->
+<footer class="pk-footer">Parai Kuzhu · Attendance System</footer>
+
+<!-- ══ REGISTRATION MODAL ════════════════════════════════════ -->
+<div class="modal fade" id="regModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title">
+          <i class="bi bi-person-plus me-2"></i>Join the Kuzhu
+        </h5>
+      </div>
+
+      <div class="modal-body px-4">
+        <p style="color:var(--muted);font-size:0.88rem;margin-bottom:1.25rem;">
+          First time here! Tell us a little about yourself.
+        </p>
+
+        <!-- Name -->
+        <div class="mb-3">
+          <label class="form-label" for="reg-name">
+            Your Name <span style="color:var(--red)">*</span>
+          </label>
+          <input type="text" class="form-control" id="reg-name"
+                 placeholder="e.g. Senthil Kumar"
+                 autocomplete="name" inputmode="text">
+          <div class="invalid-feedback">Please enter your name.</div>
+        </div>
+
+        <!-- Instrument -->
+        <div class="mb-3">
+          <label class="form-label" for="reg-instrument">
+            Instrument / Role <span style="color:var(--red)">*</span>
+          </label>
+          <select class="form-select" id="reg-instrument">
+            <option value="" disabled selected>Select your instrument or role</option>
+            <option value="Parai">Parai (Drum)</option>
+            <option value="Thavil">Thavil</option>
+            <option value="Nadaswaram">Nadaswaram</option>
+            <option value="Kanjira">Kanjira</option>
+            <option value="Udukkai">Udukkai</option>
+            <option value="Vocalist">Vocalist</option>
+            <option value="Dancer">Dancer</option>
+            <option value="Learner">Learner / New Member</option>
+            <option value="Organiser">Organiser</option>
+            <option value="Other">Other</option>
+          </select>
+          <div class="invalid-feedback">Please select your instrument.</div>
+        </div>
+
+        <!-- Email (optional) -->
+        <div class="mb-1">
+          <label class="form-label" for="reg-email">
+            Email <span style="color:var(--faint);font-weight:400;">(optional)</span>
+          </label>
+          <input type="email" class="form-control" id="reg-email"
+                 placeholder="your@email.com"
+                 autocomplete="email" inputmode="email">
+        </div>
+      </div>
+
+      <div class="modal-footer px-4 pb-4 pt-3">
+        <button class="modal-cancel-btn" onclick="cancelReg()">Cancel</button>
+        <button class="modal-submit-btn" id="btn-reg-submit" onclick="submitReg()">
+          <i class="bi bi-check2"></i>
+          Save &amp; Mark Attendance
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════
+   🔧  CONFIGURATION  —  paste your Web App URL below
+   ════════════════════════════════════════════════════════════ */
+const SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'; // ← Replace!
+
+/* ── Storage keys ── */
+const KEY_ID   = 'pk_member_id';
+const KEY_DATA = 'pk_member_data';
+
+/* ── Runtime ── */
+let member   = null;   // { localId, name, instrument, email }
+let location = '';
+let regModal = null;
+
+/* ════════════════════════════════════════════════════════════
+   Init
+   ════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  regModal = new bootstrap.Modal(document.getElementById('regModal'));
+
+  // Parse ?location= URL param
+  const params  = new URLSearchParams(window.location.search);
+  location      = params.get('location') || '';
+
+  if (location) {
+    const display = location.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    document.getElementById('loc-text-ret').textContent = display;
+    document.getElementById('loc-text-new').textContent = display;
+    document.getElementById('loc-badge-ret').style.display = 'flex';
+    document.getElementById('loc-badge-new').style.display = 'flex';
+  }
+
+  init();
+});
+
+async function init() {
+  setState('loading');
+
+  const savedId   = localStorage.getItem(KEY_ID);
+  const savedData = localStorage.getItem(KEY_DATA);
+
+  if (savedId && savedData) {
+    try {
+      member = JSON.parse(savedData);
+      showReturning();
+    } catch {
+      localStorage.removeItem(KEY_ID);
+      localStorage.removeItem(KEY_DATA);
+      setState('new');
+    }
+  } else {
+    setState('new');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   State helpers
+   ════════════════════════════════════════════════════════════ */
+function setState(name) {
+  document.querySelectorAll('.pk-state').forEach(el => el.classList.remove('pk-active'));
+  document.getElementById('state-' + name).classList.add('pk-active');
+}
+
+function showReturning() {
+  const name     = member.name || 'Member';
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  document.getElementById('member-avatar').textContent = initials;
+  document.getElementById('member-name').textContent   = name;
+  document.getElementById('member-role').textContent   = member.instrument || 'Member';
+  setState('returning');
+}
+
+function goHome() {
+  member ? showReturning() : setState('new');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Attendance — returning member
+   ════════════════════════════════════════════════════════════ */
+async function markAttendanceReturning() {
+  const btn = document.getElementById('btn-ret');
+  setBtnLoading(btn, true, 'Recording…');
+
+  try {
+    const params = new URLSearchParams({
+      action:     'recordAttendance',
+      localId:    member.localId || localStorage.getItem(KEY_ID) || '',
+      name:       member.name,
+      instrument: member.instrument || '',
+      location:   location || 'Not specified',
+    });
+
+    const res  = await fetch(`${SCRIPT_URL}?${params}`);
+    const data = await res.json();
+
+    if (data.success) {
+      showSuccess(member.name, false);
+    } else {
+      throw new Error(data.error || 'Attendance not recorded');
+    }
+  } catch (err) {
+    setBtnLoading(btn, false);
+    document.getElementById('error-msg').textContent =
+      'Could not connect. Check your internet and try again.\n(' + err.message + ')';
+    setState('error');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Registration — new member
+   ════════════════════════════════════════════════════════════ */
+function showRegModal() {
+  document.getElementById('reg-name').value       = '';
+  document.getElementById('reg-instrument').value = '';
+  document.getElementById('reg-email').value      = '';
+  document.getElementById('reg-name').classList.remove('is-invalid');
+  document.getElementById('reg-instrument').classList.remove('is-invalid');
+  regModal.show();
+  setTimeout(() => document.getElementById('reg-name').focus(), 350);
+}
+
+function cancelReg() {
+  regModal.hide();
+}
+
+async function submitReg() {
+  const name       = document.getElementById('reg-name').value.trim();
+  const instrument = document.getElementById('reg-instrument').value;
+  const email      = document.getElementById('reg-email').value.trim();
+
+  let valid = true;
+  if (!name) {
+    document.getElementById('reg-name').classList.add('is-invalid');
+    valid = false;
+  } else {
+    document.getElementById('reg-name').classList.remove('is-invalid');
+  }
+  if (!instrument) {
+    document.getElementById('reg-instrument').classList.add('is-invalid');
+    valid = false;
+  } else {
+    document.getElementById('reg-instrument').classList.remove('is-invalid');
+  }
+  if (!valid) return;
+
+  const btn     = document.getElementById('btn-reg-submit');
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="pk-btn-spinner" style="width:18px;height:18px;border-width:2px;"></div> Saving…';
+
+  const localId = generateUUID();
+
+  try {
+    /* 1 — Register member */
+    const regParams = new URLSearchParams({
+      action:     'registerMember',
+      localId,
+      name,
+      instrument,
+      email:      email || '',
+    });
+    const regRes  = await fetch(`${SCRIPT_URL}?${regParams}`);
+    const regData = await regRes.json();
+    if (!regData.success) throw new Error(regData.error || 'Registration failed');
+
+    /* 2 — Save locally */
+    member = { localId, name, instrument, email };
+    localStorage.setItem(KEY_ID,   localId);
+    localStorage.setItem(KEY_DATA, JSON.stringify(member));
+
+    /* 3 — Record attendance */
+    const attParams = new URLSearchParams({
+      action:     'recordAttendance',
+      localId,
+      name,
+      instrument,
+      location:   location || 'Not specified',
+    });
+    await fetch(`${SCRIPT_URL}?${attParams}`); // fire-and-forget after reg success
+
+    regModal.hide();
+    showSuccess(name, true);
+
+  } catch (err) {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-check2"></i> Save &amp; Mark Attendance';
+    alert('⚠️ Error: ' + err.message + '\n\nPlease check your internet connection and try again.');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Success
+   ════════════════════════════════════════════════════════════ */
+function showSuccess(name, isNew) {
+  const now   = new Date();
+  const time  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+  const date  = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  let msg = `${isNew ? 'Welcome to the Kuzhu, ' : 'Great to see you, '}<strong>${escHtml(name)}</strong>!<br>`;
+  msg    += `Recorded at ${time} on ${date}.`;
+  if (location) {
+    const display = location.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    msg += `<br><small><i class="bi bi-geo-alt-fill"></i> ${display}</small>`;
+  }
+
+  document.getElementById('success-msg').innerHTML = msg;
+  setState('success');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Reset (change member)
+   ════════════════════════════════════════════════════════════ */
+function resetMember() {
+  if (!confirm('This will remove your saved details from this device.\nAre you sure?')) return;
+  localStorage.removeItem(KEY_ID);
+  localStorage.removeItem(KEY_DATA);
+  member = null;
+  setState('new');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Utilities
+   ════════════════════════════════════════════════════════════ */
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function setBtnLoading(btn, loading, label) {
+  if (loading) {
+    btn._orig    = btn.innerHTML;
+    btn.innerHTML = `<div class="pk-btn-spinner"></div><span>${label || 'Loading…'}</span>`;
+    btn.classList.add('pk-btn-loading');
+    btn.disabled  = true;
+  } else {
+    btn.innerHTML = btn._orig || btn.innerHTML;
+    btn.classList.remove('pk-btn-loading');
+    btn.disabled  = false;
+  }
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parai Kuzhu – Admin</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --red:     #c0392b;
+      --orange:  #e67e22;
+      --green:   #27ae60;
+      --blue:    #2980b9;
+      --bg:      #f2ece4;
+      --surface: #ffffff;
+      --nav-bg:  #2d1510;
+      --text:    #2c1810;
+      --muted:   #7f8c8d;
+      --border:  #e0d5cc;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══ LOGIN SCREEN ═══════════════════════════════════════ */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(145deg, #1a0a08 0%, #3d1a0c 100%);
+    }
+    .login-card {
+      background: #2d1510;
+      border: 1px solid #5a2418;
+      border-radius: 24px;
+      padding: 2.5rem 2.25rem;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 24px 72px rgba(0,0,0,0.55);
+    }
+    .login-drum  { font-size: 3rem; line-height: 1; margin-bottom: 0.5rem; }
+    .login-title { color: #e67e22; font-size: 1.5rem; font-weight: 800; margin-bottom: 0.2rem; }
+    .login-sub   { color: #8a5030; font-size: 0.875rem; margin-bottom: 1.75rem; }
+
+    .login-input {
+      width: 100%;
+      background: #3a1a0c;
+      border: 1px solid #6a3020;
+      color: #f5e6d3;
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .login-input:focus     { border-color: #e67e22; box-shadow: 0 0 0 3px rgba(230,126,34,0.2); }
+    .login-input::placeholder { color: #5a3020; }
+
+    .login-btn {
+      width: 100%;
+      background: var(--red);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      padding: 0.8rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .login-btn:hover   { background: #a93226; }
+    .login-btn.green   { background: var(--green); }
+    .login-btn.green:hover { background: #1e8449; }
+
+    .login-error { color: #e74c3c; font-size: 0.82rem; margin-top: 0.5rem; display: none; }
+
+    .setup-section {
+      margin-top: 1.5rem;
+      border-top: 1px solid #5a2418;
+      padding-top: 1.5rem;
+      display: none;
+    }
+    .setup-section p { color: #8a5030; font-size: 0.82rem; margin-bottom: 1rem; }
+
+    /* ══ ADMIN PANEL ════════════════════════════════════════ */
+    #admin-panel { display: none; min-height: 100vh; }
+
+    /* Navbar */
+    .pk-navbar {
+      background: var(--nav-bg);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .pk-brand {
+      color: #e67e22;
+      font-weight: 800;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+    .pk-logout {
+      background: none;
+      border: none;
+      color: #9a6040;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 8px;
+      transition: color 0.15s;
+    }
+    .pk-logout:hover { color: #f5e6d3; }
+
+    /* Content */
+    .pk-content {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem;
+    }
+    .pk-page-title { font-size: 1.3rem; font-weight: 700; color: var(--text); margin: 0; }
+
+    /* Stat cards */
+    .stat-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 1.1rem 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-left: 4px solid var(--red);
+      height: 100%;
+    }
+    .stat-card.orange { border-left-color: var(--orange); }
+    .stat-card.green  { border-left-color: var(--green);  }
+    .stat-card.blue   { border-left-color: var(--blue);   }
+    .stat-val   { font-size: 1.9rem; font-weight: 800; line-height: 1; color: var(--text); }
+    .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; }
+
+    /* Tabs */
+    .pk-tabs {
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 1.25rem;
+      display: flex;
+      gap: 0;
+    }
+    .pk-tab {
+      padding: 0.7rem 1.1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--muted);
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .pk-tab:hover       { color: var(--text); }
+    .pk-tab.active      { color: var(--red); border-bottom-color: var(--red); }
+
+    /* Filter row */
+    .filter-bar {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 0.875rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+    }
+    .filter-bar .form-control,
+    .filter-bar .form-select {
+      border-radius: 8px;
+      border-color: var(--border);
+      font-size: 0.875rem;
+    }
+    .filter-bar .btn { border-radius: 8px; font-size: 0.875rem; }
+
+    /* Table card */
+    .pk-table-wrap {
+      background: var(--surface);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .pk-table-wrap table { margin: 0; font-size: 0.875rem; }
+    .pk-table-wrap thead th {
+      background: #2d1510;
+      color: #f5e6d3;
+      font-weight: 600;
+      border: none;
+      white-space: nowrap;
+      padding: 0.75rem 1rem;
+    }
+    .pk-table-wrap tbody td { padding: 0.7rem 1rem; vertical-align: middle; }
+    .pk-table-wrap tbody tr:hover { background: #fdf8f4; }
+
+    .badge-paid {
+      background: #d5f5e3; color: #1a7a3c;
+      border: 1px solid #a9dfbf;
+      border-radius: 6px; padding: 0.18rem 0.55rem;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .badge-unpaid {
+      background: #fde8e8; color: #b03020;
+      border: 1px solid #f5b7b1;
+      border-radius: 6px; padding: 0.18rem 0.55rem;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .badge-neutral {
+      background: #f0e8e0; color: #604030;
+      border-radius: 6px; padding: 0.18rem 0.55rem;
+      font-size: 0.75rem; font-weight: 600;
+    }
+
+    /* Contribution grid */
+    .contrib-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 1rem;
+    }
+    .contrib-card {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-top: 3px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .contrib-card.paid   { border-top-color: var(--green); }
+    .contrib-card.unpaid { border-top-color: var(--red);   }
+    .contrib-name { font-weight: 700; font-size: 1rem; }
+    .contrib-role { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .contrib-toggle {
+      border: none;
+      border-radius: 8px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .contrib-toggle:hover { opacity: 0.8; }
+    .contrib-toggle.mark-paid   { background: #d5f5e3; color: #1a7a3c; }
+    .contrib-toggle.mark-unpaid { background: #fde8e8; color: #b03020; }
+
+    /* Spinner */
+    .pk-spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(0,0,0,0.1);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+    .empty-state .empty-icon { font-size: 2.5rem; opacity: 0.3; display: block; margin-bottom: 0.75rem; }
+
+    /* Refresh btn */
+    .pk-refresh-btn {
+      background: #2d1510; color: #f5e6d3;
+      border: none; border-radius: 10px;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; display: flex;
+      align-items: center; gap: 0.35rem;
+      transition: background 0.15s;
+    }
+    .pk-refresh-btn:hover { background: #4a2010; }
+
+    /* Toast */
+    .pk-toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: #222; color: #fff;
+      border-radius: 12px; padding: 0.65rem 1.25rem;
+      font-size: 0.875rem; z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .pk-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-drum">🥁</div>
+    <h1 class="login-title">Parai Kuzhu</h1>
+    <p class="login-sub" id="login-sub">Admin Dashboard</p>
+
+    <!-- Normal login -->
+    <div id="login-form">
+      <input type="password" class="login-input" id="admin-pw"
+             placeholder="Enter admin password"
+             autocomplete="current-password"
+             onkeyup="if(event.key==='Enter') doLogin()">
+      <button class="login-btn" onclick="doLogin()">
+        <i class="bi bi-shield-lock me-2"></i>Login
+      </button>
+      <div class="login-error" id="login-error">Incorrect password. Please try again.</div>
+    </div>
+
+    <!-- First-time setup (shown when no hash stored) -->
+    <div class="setup-section" id="setup-section">
+      <p><i class="bi bi-info-circle me-1"></i>First time? Create an admin password to get started.</p>
+      <input type="password" class="login-input" id="setup-pw"  placeholder="New password (min 4 chars)">
+      <input type="password" class="login-input" id="setup-pw2" placeholder="Confirm password"
+             onkeyup="if(event.key==='Enter') doSetup()">
+      <button class="login-btn green" onclick="doSetup()">
+        <i class="bi bi-check2 me-2"></i>Set Password &amp; Login
+      </button>
+      <div class="login-error" id="setup-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADMIN PANEL ════════════════════════════════════════════ -->
+<div id="admin-panel">
+
+  <!-- Navbar -->
+  <nav class="pk-navbar">
+    <span class="pk-brand">🥁 Parai Kuzhu</span>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <span style="color:#6a4020;font-size:0.78rem;">Admin</span>
+      <button class="pk-logout" onclick="doLogout()">
+        <i class="bi bi-box-arrow-right"></i> Logout
+      </button>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <div class="pk-content">
+
+    <!-- Header row -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="pk-page-title">Dashboard</h2>
+      <button class="pk-refresh-btn" onclick="refreshAll()" id="refresh-btn">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-val"   id="s-members">–</div>
+          <div class="stat-label"><i class="bi bi-people me-1"></i>Total Members</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card orange">
+          <div class="stat-val"   id="s-month">–</div>
+          <div class="stat-label"><i class="bi bi-calendar-check me-1"></i>This Month</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card green">
+          <div class="stat-val"   id="s-paid">–</div>
+          <div class="stat-label"><i class="bi bi-cash me-1"></i>Paid</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card blue">
+          <div class="stat-val"   id="s-unpaid">–</div>
+          <div class="stat-label"><i class="bi bi-hourglass me-1"></i>Unpaid</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="pk-tabs">
+      <button class="pk-tab active" id="tab-att" onclick="switchTab('att')">
+        <i class="bi bi-calendar-check"></i> Attendance
+      </button>
+      <button class="pk-tab" id="tab-mem" onclick="switchTab('mem')">
+        <i class="bi bi-people"></i> Members
+      </button>
+      <button class="pk-tab" id="tab-con" onclick="switchTab('con')">
+        <i class="bi bi-cash-stack"></i> Contributions
+      </button>
+    </div>
+
+    <!-- ── Attendance Panel ── -->
+    <div id="panel-att">
+      <div class="filter-bar">
+        <input type="text"  class="form-control" id="att-search" placeholder="Search name…"
+               style="max-width:180px;" oninput="filterAtt()">
+        <input type="date"  class="form-control" id="att-date"
+               style="max-width:155px;" onchange="filterAtt()">
+        <button class="btn btn-outline-secondary btn-sm" onclick="clearAttFilter()">Clear</button>
+        <span style="margin-left:auto;color:var(--muted);font-size:0.8rem;" id="att-count"></span>
+      </div>
+
+      <div class="pk-table-wrap">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Name</th>
+                <th>Instrument</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody id="att-body">
+              <tr><td colspan="5" class="text-center py-4 text-muted">
+                <span class="pk-spinner"></span>&nbsp; Loading…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Members Panel ── -->
+    <div id="panel-mem" style="display:none">
+      <div class="pk-table-wrap">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Instrument</th>
+                <th>Email</th>
+                <th>Joined</th>
+                <th>Sessions</th>
+              </tr>
+            </thead>
+            <tbody id="mem-body">
+              <tr><td colspan="6" class="text-center py-4 text-muted">
+                <span class="pk-spinner"></span>&nbsp; Loading…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Contributions Panel ── -->
+    <div id="panel-con" style="display:none">
+      <div class="filter-bar">
+        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">View month:</label>
+        <select class="form-select form-select-sm" id="con-month" style="max-width:130px;" onchange="loadContribs()"></select>
+        <select class="form-select form-select-sm" id="con-year"  style="max-width:95px;"  onchange="loadContribs()"></select>
+        <button class="btn btn-sm" style="background:var(--green);color:#fff;border-radius:8px;"
+                onclick="autoGenContribs()">
+          <i class="bi bi-magic me-1"></i>Auto-Generate
+        </button>
+        <span style="font-size:0.78rem;color:var(--muted);" class="d-none d-md-inline">
+          <i class="bi bi-info-circle me-1"></i>Click card button to toggle paid / unpaid
+        </span>
+      </div>
+
+      <div id="contrib-container">
+        <div class="text-center py-4 text-muted">
+          <span class="pk-spinner"></span>&nbsp; Loading…
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pk-content -->
+</div><!-- /admin-panel -->
+
+<!-- Toast -->
+<div class="pk-toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════
+   🔧  CONFIGURATION  —  paste your Web App URL below
+   ════════════════════════════════════════════════════════════ */
+const SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'; // ← Replace!
+
+/* ── Auth key ── */
+const AUTH_KEY = 'pk_admin_hash';
+
+/* ── Runtime data ── */
+let allLogs     = [];
+let allMembers  = [];
+let allContribs = [];
+
+/* ════════════════════════════════════════════════════════════
+   SHA-256 (Web Crypto API)
+   ════════════════════════════════════════════════════════════ */
+async function sha256(msg) {
+  const buf  = new TextEncoder().encode(msg);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Boot
+   ════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  const hasHash = !!localStorage.getItem(AUTH_KEY);
+
+  if (!hasHash) {
+    // First-time setup
+    document.getElementById('login-sub').textContent = 'First-time setup — create an admin password';
+    document.getElementById('login-form').style.display   = 'none';
+    document.getElementById('setup-section').style.display = 'block';
+  }
+
+  setupMonthYear();
+});
+
+/* ════════════════════════════════════════════════════════════
+   Auth
+   ════════════════════════════════════════════════════════════ */
+async function doLogin() {
+  const pw     = document.getElementById('admin-pw').value;
+  const stored = localStorage.getItem(AUTH_KEY);
+  if (!pw || !stored) return;
+
+  const hash = await sha256(pw);
+  if (hash === stored) {
+    enterAdmin();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('admin-pw').value = '';
+    document.getElementById('admin-pw').focus();
+  }
+}
+
+async function doSetup() {
+  const pw   = document.getElementById('setup-pw').value;
+  const pw2  = document.getElementById('setup-pw2').value;
+  const errEl = document.getElementById('setup-error');
+
+  if (!pw || pw.length < 4) {
+    errEl.textContent = 'Password must be at least 4 characters.';
+    errEl.style.display = 'block'; return;
+  }
+  if (pw !== pw2) {
+    errEl.textContent = 'Passwords do not match.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+
+  const hash = await sha256(pw);
+  localStorage.setItem(AUTH_KEY, hash);
+  enterAdmin();
+}
+
+function doLogout() {
+  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('admin-pw').value = '';
+
+  // Re-check if setup form needed
+  const hasHash = !!localStorage.getItem(AUTH_KEY);
+  if (hasHash) {
+    document.getElementById('login-form').style.display   = 'block';
+    document.getElementById('setup-section').style.display = 'none';
+    document.getElementById('login-sub').textContent = 'Admin Dashboard';
+  }
+}
+
+function enterAdmin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('admin-panel').style.display  = 'block';
+  initDashboard();
+}
+
+/* ════════════════════════════════════════════════════════════
+   Dashboard
+   ════════════════════════════════════════════════════════════ */
+async function initDashboard() {
+  await Promise.all([loadLogs(), loadMembers()]);
+  updateTopStats();
+  loadContribs();
+}
+
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.innerHTML = '<span class="pk-spinner" style="border-top-color:#f5e6d3;border-color:rgba(255,255,255,0.2)"></span> Refreshing…';
+  await initDashboard();
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+  showToast('Dashboard refreshed ✓');
+}
+
+/* ── Tabs ── */
+function switchTab(id) {
+  ['att','mem','con'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === id);
+    document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   Attendance
+   ════════════════════════════════════════════════════════════ */
+async function loadLogs() {
+  try {
+    const res  = await fetch(`${SCRIPT_URL}?action=getLogs&limit=600`);
+    const data = await res.json();
+    allLogs = data.logs || [];
+    renderLogs(allLogs);
+  } catch (e) {
+    document.getElementById('att-body').innerHTML =
+      `<tr><td colspan="5" class="text-center py-3 text-danger">⚠️ ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderLogs(logs) {
+  document.getElementById('att-count').textContent = logs.length + ' records';
+  const body = document.getElementById('att-body');
+
+  if (!logs.length) {
+    body.innerHTML = `<tr><td colspan="5">
+      <div class="empty-state"><span class="empty-icon">📅</span>No attendance records yet.</div>
+    </td></tr>`;
+    return;
+  }
+
+  body.innerHTML = logs.slice(0, 250).map(log => {
+    const ts      = log.timestamp ? new Date(log.timestamp) : null;
+    const timeStr = ts ? ts.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : '–';
+    return `<tr>
+      <td>${esc(log.date || '–')}</td>
+      <td style="color:var(--muted);">${timeStr}</td>
+      <td><strong>${esc(log.name || '–')}</strong></td>
+      <td><span class="badge-neutral">${esc(log.instrument || '–')}</span></td>
+      <td><span style="font-size:0.8rem;color:var(--muted);">${esc(log.location || '–')}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterAtt() {
+  const q    = document.getElementById('att-search').value.toLowerCase();
+  const date = document.getElementById('att-date').value;
+
+  let filtered = allLogs;
+  if (q)    filtered = filtered.filter(l => (l.name || '').toLowerCase().includes(q));
+  if (date) {
+    const [y,m,d] = date.split('-');
+    const fmt     = `${d}/${m}/${y}`;
+    filtered = filtered.filter(l => l.date === fmt);
+  }
+  renderLogs(filtered);
+}
+
+function clearAttFilter() {
+  document.getElementById('att-search').value = '';
+  document.getElementById('att-date').value   = '';
+  renderLogs(allLogs);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Members
+   ════════════════════════════════════════════════════════════ */
+async function loadMembers() {
+  try {
+    const res  = await fetch(`${SCRIPT_URL}?action=getMembers`);
+    const data = await res.json();
+    allMembers = data.members || [];
+    renderMembers();
+  } catch (e) {
+    document.getElementById('mem-body').innerHTML =
+      `<tr><td colspan="6" class="text-center py-3 text-danger">⚠️ ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderMembers() {
+  const body = document.getElementById('mem-body');
+  if (!allMembers.length) {
+    body.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state"><span class="empty-icon">👥</span>No members yet.</div>
+    </td></tr>`;
+    return;
+  }
+
+  // Count attendance per member
+  const countMap = {};
+  allLogs.forEach(l => { countMap[l.localid] = (countMap[l.localid] || 0) + 1; });
+
+  body.innerHTML = allMembers.map((m, i) => {
+    const cnt = countMap[m.localId] || 0;
+    return `<tr>
+      <td style="color:var(--muted);">${i+1}</td>
+      <td><strong>${esc(m.name)}</strong></td>
+      <td><span class="badge-neutral">${esc(m.instrument || '–')}</span></td>
+      <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
+      <td style="font-size:0.83rem;color:var(--muted);">${esc(m.joinDate || '–')}</td>
+      <td><span class="badge-neutral">${cnt} session${cnt !== 1 ? 's' : ''}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Contributions
+   ════════════════════════════════════════════════════════════ */
+function setupMonthYear() {
+  const months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+  const now    = new Date();
+
+  const mSel = document.getElementById('con-month');
+  months.forEach((m, i) => {
+    const o = new Option(m, i+1);
+    if (i === now.getMonth()) o.selected = true;
+    mSel.add(o);
+  });
+
+  const ySel = document.getElementById('con-year');
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 2; y--) {
+    const o = new Option(y, y);
+    ySel.add(o);
+  }
+}
+
+async function loadContribs() {
+  const month = document.getElementById('con-month').value;
+  const year  = document.getElementById('con-year').value;
+
+  document.getElementById('contrib-container').innerHTML =
+    '<div class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>';
+
+  try {
+    const res   = await fetch(`${SCRIPT_URL}?action=getContributions&month=${month}&year=${year}`);
+    const data  = await res.json();
+    allContribs = data.contributions || [];
+    renderContribs();
+  } catch (e) {
+    document.getElementById('contrib-container').innerHTML =
+      `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+function renderContribs() {
+  const container = document.getElementById('contrib-container');
+  const month     = parseInt(document.getElementById('con-month').value);
+  const year      = parseInt(document.getElementById('con-year').value);
+  const monthName = new Date(year, month-1).toLocaleString('en', { month:'long' });
+
+  if (!allMembers.length) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">👥</span>No members loaded yet.</div>';
+    return;
+  }
+
+  // Build lookup map
+  const cMap = {};
+  allContribs.forEach(c => { cMap[c.memberId] = c; });
+
+  let paidCount = 0;
+  const cards = allMembers.map(m => {
+    const c      = cMap[m.localId];
+    const isPaid = c && c.status === 'Paid';
+    if (isPaid) paidCount++;
+
+    return `
+      <div class="contrib-card ${isPaid ? 'paid' : 'unpaid'}">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <div>
+            <div class="contrib-name">${esc(m.name)}</div>
+            <div class="contrib-role">${esc(m.instrument || 'Member')}</div>
+          </div>
+          <span class="${isPaid ? 'badge-paid' : 'badge-unpaid'}">
+            ${isPaid ? '✓ Paid' : '✗ Unpaid'}
+          </span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span style="font-size:0.8rem;color:var(--muted);">${monthName} ${year} · $30</span>
+          <button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
+                  onclick="toggleContrib('${esc(m.localId)}','${esc(m.name)}',${isPaid})">
+            ${isPaid ? '✗ Mark Unpaid' : '✓ Mark Paid'}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="contrib-grid">${cards}</div>`;
+
+  // Update contribution stats
+  document.getElementById('s-paid').textContent   = paidCount;
+  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount;
+}
+
+async function toggleContrib(memberId, memberName, currentlyPaid) {
+  const month     = document.getElementById('con-month').value;
+  const year      = document.getElementById('con-year').value;
+  const newStatus = currentlyPaid ? 'Unpaid' : 'Paid';
+
+  try {
+    const params = new URLSearchParams({
+      action:     'updateContribution',
+      memberId,
+      memberName,
+      month,
+      year,
+      amount:     30,
+      status:     newStatus,
+    });
+    const res  = await fetch(`${SCRIPT_URL}?${params}`);
+    const data = await res.json();
+    if (data.success) {
+      await loadContribs();
+      showToast(`${memberName} marked as ${newStatus}`);
+    } else {
+      throw new Error(data.error || 'Update failed');
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function autoGenContribs() {
+  const month     = document.getElementById('con-month').value;
+  const year      = document.getElementById('con-year').value;
+  const monthName = new Date(year, month-1).toLocaleString('en', { month:'long' });
+
+  if (!allMembers.length) {
+    alert('No members found. Please refresh first.'); return;
+  }
+
+  const existing = new Set(allContribs.map(c => c.memberId));
+  const toCreate = allMembers.filter(m => !existing.has(m.localId));
+
+  if (!toCreate.length) {
+    showToast('All members already have records for this month ✓'); return;
+  }
+
+  if (!confirm(`Create contribution records for ${toCreate.length} member(s)\nfor ${monthName} ${year}?\n\nExisting records will not be changed.`)) return;
+
+  for (const m of toCreate) {
+    const params = new URLSearchParams({
+      action:     'updateContribution',
+      memberId:   m.localId,
+      memberName: m.name,
+      month, year,
+      amount: 30,
+      status: 'Unpaid',
+    });
+    await fetch(`${SCRIPT_URL}?${params}`);
+  }
+
+  await loadContribs();
+  showToast(`Created ${toCreate.length} new record(s) ✓`);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Stats
+   ════════════════════════════════════════════════════════════ */
+function updateTopStats() {
+  document.getElementById('s-members').textContent = allMembers.length;
+
+  const now   = new Date();
+  const month = now.getMonth() + 1;
+  const year  = now.getFullYear();
+
+  const thisMonth = allLogs.filter(l => {
+    if (!l.date) return false;
+    const [d,m,y] = l.date.split('/');
+    return parseInt(m) === month && parseInt(y) === year;
+  });
+  document.getElementById('s-month').textContent = thisMonth.length;
+  // Contribution stats updated by renderContribs()
+}
+
+/* ════════════════════════════════════════════════════════════
+   Utilities
+   ════════════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
