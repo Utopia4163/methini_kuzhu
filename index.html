@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1a0a08">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥁</text></svg>">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Parai Kuzhu – Attendance</title>
 
@@ -406,9 +408,9 @@ const KEY_ID   = 'pk_member_id';
 const KEY_DATA = 'pk_member_data';
 
 /* ── Runtime ── */
-let member   = null;   // { localId, name, instrument, email }
-let location = '';
-let regModal = null;
+let member       = null;   // { localId, name, instrument, email }
+let venueLocation = '';
+let regModal     = null;
 
 /* ════════════════════════════════════════════════════════════
    Init
@@ -417,11 +419,11 @@ document.addEventListener('DOMContentLoaded', () => {
   regModal = new bootstrap.Modal(document.getElementById('regModal'));
 
   // Parse ?location= URL param
-  const params  = new URLSearchParams(window.location.search);
-  location      = params.get('location') || '';
+  const params   = new URLSearchParams(window.location.search);
+  venueLocation  = params.get('location') || '';
 
-  if (location) {
-    const display = location.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  if (venueLocation) {
+    const display = venueLocation.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     document.getElementById('loc-text-ret').textContent = display;
     document.getElementById('loc-text-new').textContent = display;
     document.getElementById('loc-badge-ret').style.display = 'flex';
@@ -485,7 +487,7 @@ async function markAttendanceReturning() {
       localId:    member.localId || localStorage.getItem(KEY_ID) || '',
       name:       member.name,
       instrument: member.instrument || '',
-      location:   location || 'Not specified',
+      location:   venueLocation || 'Not specified',
     });
 
     const res  = await fetch(`${SCRIPT_URL}?${params}`);
@@ -571,7 +573,7 @@ async function submitReg() {
       localId,
       name,
       instrument,
-      location:   location || 'Not specified',
+      location:   venueLocation || 'Not specified',
     });
     await fetch(`${SCRIPT_URL}?${attParams}`); // fire-and-forget after reg success
 
@@ -595,8 +597,8 @@ function showSuccess(name, isNew) {
 
   let msg = `${isNew ? 'Welcome to the Kuzhu, ' : 'Great to see you, '}<strong>${escHtml(name)}</strong>!<br>`;
   msg    += `Recorded at ${time} on ${date}.`;
-  if (location) {
-    const display = location.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  if (venueLocation) {
+    const display = venueLocation.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     msg += `<br><small><i class="bi bi-geo-alt-fill"></i> ${display}</small>`;
   }
 
