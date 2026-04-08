@@ -239,40 +239,6 @@
       font-size: 0.75rem; font-weight: 600;
     }
 
-    /* Contribution grid */
-    .contrib-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-      gap: 1rem;
-    }
-    .contrib-card {
-      background: var(--surface);
-      border-radius: 14px;
-      padding: 1.1rem 1.25rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-      border-top: 3px solid var(--border);
-      transition: border-color 0.2s;
-    }
-    .contrib-card.paid   { border-top-color: var(--green); }
-    .contrib-card.unpaid { border-top-color: var(--red);   }
-    .contrib-name  { font-weight: 700; font-size: 1rem; }
-    .contrib-role  { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .contrib-notes { font-size: 0.8rem; color: #5a4030; background: #fdf6f0;
-                     border-radius: 6px; padding: 0.3rem 0.6rem; margin-bottom: 0.4rem;
-                     border-left: 3px solid var(--orange); }
-    .contrib-meta  { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .contrib-toggle {
-      border: none;
-      border-radius: 8px;
-      padding: 0.3rem 0.65rem;
-      font-size: 0.78rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .contrib-toggle:hover { opacity: 0.8; }
-    .contrib-toggle.mark-paid   { background: #d5f5e3; color: #1a7a3c; }
-    .contrib-toggle.mark-unpaid { background: #fde8e8; color: #b03020; }
     .contrib-history-btn {
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -338,6 +304,130 @@
       pointer-events: none;
     }
     .pk-toast.show { opacity: 1; }
+
+    /* ══ CONTRIBUTION YEAR TABLE ═══════════════════════════════ */
+    .contrib-year-wrap {
+      background: var(--surface);
+      border-radius: 16px;
+      overflow-x: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .contrib-year-table {
+      width: 100%;
+      min-width: 920px;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .contrib-year-table thead th {
+      background: #2d1510;
+      color: #f5e6d3;
+      font-weight: 600;
+      padding: 0.6rem 0.35rem;
+      text-align: center;
+      white-space: nowrap;
+      border: none;
+      font-size: 0.78rem;
+    }
+    .contrib-year-table thead th.cy-name {
+      text-align: left;
+      padding-left: 1rem;
+      min-width: 140px;
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #2d1510;
+    }
+    .contrib-year-table tbody td {
+      padding: 0.38rem 0.3rem;
+      text-align: center;
+      vertical-align: middle;
+      border-bottom: 1px solid #f0e8e0;
+    }
+    .contrib-year-table tbody td.cy-name {
+      text-align: left;
+      padding-left: 1rem;
+      font-weight: 600;
+      font-size: 0.85rem;
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      z-index: 1;
+      border-right: 1px solid #f0e8e0;
+    }
+    .contrib-year-table tbody tr:hover td { background: #fdf8f4; }
+    .contrib-year-table tbody tr:hover td.cy-name { background: #fdf8f4; }
+
+    /* Month chip */
+    .mc {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 42px;
+      height: 28px;
+      border-radius: 6px;
+      font-size: 0.73rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.12s, transform 0.1s;
+      position: relative;
+      padding: 0 4px;
+      user-select: none;
+    }
+    .mc:hover  { filter: brightness(0.86); transform: scale(1.1); }
+    .mc:active { transform: scale(0.94); }
+    .mc.mc-paid   { background: #d5f5e3; color: #1a7a3c; }
+    .mc.mc-unpaid { background: #fde8e8; color: #b03020; }
+    .mc.mc-empty  { background: #f2ede7; color: #b8a890;
+                    border: 1px dashed #d0c0b0; font-weight: 400; font-size: 0.8rem; }
+    .mc-dot { position: absolute; top: 2px; right: 2px;
+              width: 5px; height: 5px; border-radius: 50%;
+              background: var(--orange); }
+
+    /* Opening Balance chip */
+    .ob-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 50px;
+      height: 28px;
+      border-radius: 6px;
+      font-size: 0.73rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      background: #ddeeff;
+      color: #1a4a8a;
+      transition: filter 0.12s;
+      position: relative;
+    }
+    .ob-btn.ob-empty { background: #f2ede7; color: #b8a890;
+                       border: 1px dashed #d0c0b0; font-weight: 400; }
+    .ob-btn:hover { filter: brightness(0.88); }
+
+    /* Total column */
+    .cy-total { font-weight: 700; color: var(--green); white-space: nowrap; padding-right: 0.75rem !important; }
+    .cy-total.cy-zero { color: var(--muted); font-weight: 400; }
+
+    /* Row highlight when navigating from Members tab */
+    @keyframes rowPop {
+      0%, 10% { background: rgba(230, 126, 34, 0.2) !important; }
+      100%     { background: transparent; }
+    }
+    .contrib-row-hi td { animation: rowPop 2s ease-out forwards; }
+
+    /* Record Contribution link button in Members table */
+    .contrib-link-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.18rem 0.5rem;
+      font-size: 0.74rem;
+      color: var(--blue);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .contrib-link-btn:hover { background: #eef4fb; border-color: var(--blue); }
   </style>
 </head>
 <body>
@@ -503,10 +593,11 @@
                 <th>Sessions</th>
                 <th>Payments (paid / total)</th>
                 <th>Total Collected</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="mem-body">
-              <tr><td colspan="7" class="text-center py-4 text-muted">
+              <tr><td colspan="8" class="text-center py-4 text-muted">
                 <span class="pk-spinner"></span>&nbsp; Loading…
               </td></tr>
             </tbody>
@@ -518,11 +609,14 @@
     <!-- ── Contributions Panel ── -->
     <div id="panel-con" style="display:none">
       <div class="filter-bar">
-        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">Month:</label>
-        <select class="form-select form-select-sm" id="con-month" style="max-width:130px;" onchange="loadContribs()"></select>
-        <select class="form-select form-select-sm" id="con-year"  style="max-width:95px;"  onchange="loadContribs()"></select>
+        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">Year:</label>
+        <select class="form-select form-select-sm" id="con-year" style="max-width:100px;" onchange="loadContribs()"></select>
         <span style="font-size:0.78rem;color:var(--muted);" class="d-none d-md-inline">
-          <i class="bi bi-info-circle me-1"></i>Click a member card to record or edit their payment
+          <i class="bi bi-info-circle me-1"></i>
+          Click any cell to record or edit · <span style="color:#1a4a8a;font-weight:600;">Blue</span> = opening balance &nbsp;
+          <span style="color:#1a7a3c;font-weight:600;">Green</span> = paid &nbsp;
+          <span style="color:#b03020;font-weight:600;">Red</span> = unpaid &nbsp;
+          <span style="color:#b8a890;font-weight:600;">—</span> = no record
         </span>
       </div>
 
@@ -582,7 +676,7 @@
       <div class="modal-body px-4">
 
         <!-- Status toggle -->
-        <div class="mb-3">
+        <div class="mb-3" id="cm-status-section">
           <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">STATUS</label>
           <div class="d-flex gap-2">
             <button class="status-toggle-btn" id="cm-btn-paid"   onclick="setCMStatus('Paid')">✓ Paid</button>
@@ -604,8 +698,8 @@
 
         <!-- Notes -->
         <div class="mb-3">
-          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-notes">
-            NOTES <span style="font-weight:400;">(e.g. covers Feb + March, cash / bank ref #123)</span>
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-notes" id="cm-notes-label">
+            NOTES
           </label>
           <textarea class="form-control" id="cm-notes" rows="2"
                     placeholder="Optional — payment method, reference, or which months this covers…"
@@ -946,7 +1040,7 @@ async function loadMembers() {
 function renderMembers() {
   const body = document.getElementById('mem-body');
   if (!allMembers.length) {
-    body.innerHTML = `<tr><td colspan="7">
+    body.innerHTML = `<tr><td colspan="8">
       <div class="empty-state"><span class="empty-icon">👥</span>No members yet. Use "Add Member" to add someone.</div>
     </td></tr>`;
     return;
@@ -958,9 +1052,13 @@ function renderMembers() {
 
   body.innerHTML = allMembers.map((m, i) => {
     const cnt        = countMap[m.localId] || 0;
-    const mContribs  = allContribsAll.filter(c => String(c.memberId) === String(m.localId));
+    // Exclude opening-balance (month=0) records from the paid-months count
+    const mContribs  = allContribsAll.filter(c => String(c.memberId) === String(m.localId) && parseInt(c.month) > 0);
     const paidMonths = mContribs.filter(c => c.status === 'Paid');
-    const totalPaid  = paidMonths.reduce((s, c) => s + (Number(c.amount) || 30), 0);
+    // Include OB in total
+    const obRec      = allContribsAll.find(c => String(c.memberId) === String(m.localId) && parseInt(c.month) === 0);
+    const obAmt      = obRec ? (Number(obRec.amount) || 0) : 0;
+    const totalPaid  = obAmt + paidMonths.reduce((s, c) => s + (Number(c.amount) || 30), 0);
     const allPaid    = mContribs.length > 0 && paidMonths.length === mContribs.length;
 
     return `<tr>
@@ -973,8 +1071,32 @@ function renderMembers() {
             ${paidMonths.length} / ${mContribs.length} months
           </span></td>
       <td style="font-weight:600;color:var(--green);">$${totalPaid}</td>
+      <td>
+        <button class="contrib-link-btn" onclick="goToContribs('${esc(m.localId)}','${esc(m.name)}')">
+          <i class="bi bi-cash-coin me-1"></i>Contributions
+        </button>
+      </td>
     </tr>`;
   }).join('');
+}
+
+/* ── Navigate from Members → Contributions ──────────────────── */
+function goToContribs(memberId, memberName) {
+  switchTab('con');
+  // Give the tab a moment to paint, then scroll to the member's row
+  setTimeout(() => {
+    const row = document.getElementById('cr-' + memberId);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.remove('contrib-row-hi');          // reset any existing animation
+      void row.offsetWidth;                            // force reflow so animation re-fires
+      row.classList.add('contrib-row-hi');
+      setTimeout(() => row.classList.remove('contrib-row-hi'), 2200);
+    }
+    // Auto-open current month so admin can record straight away
+    const now = new Date();
+    openContribModal(memberId, memberName, now.getMonth() + 1, now.getFullYear());
+  }, 180);
 }
 
 /* ── Add Member ─────────────────────────────────────────────── */
@@ -1028,33 +1150,23 @@ function generateUUID() {
    Contributions
    ════════════════════════════════════════════════════════════ */
 function setupMonthYear() {
-  const months = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-  const now    = new Date();
-
-  const mSel = document.getElementById('con-month');
-  months.forEach((m, i) => {
-    const o = new Option(m, i+1);
-    if (i === now.getMonth()) o.selected = true;
-    mSel.add(o);
-  });
-
+  const now  = new Date();
   const ySel = document.getElementById('con-year');
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 2; y--) {
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
     const o = new Option(y, y);
     ySel.add(o);
   }
 }
 
 async function loadContribs() {
-  const month = document.getElementById('con-month').value;
-  const year  = document.getElementById('con-year').value;
+  const year = document.getElementById('con-year').value;
 
   document.getElementById('contrib-container').innerHTML =
     '<div class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>';
 
   try {
-    const data  = await apiRead({ action: 'getContributions', month, year });
+    // Load all months for the selected year (no month filter)
+    const data  = await apiRead({ action: 'getContributions', year });
     allContribs = data.contributions || [];
     renderContribs();
   } catch (e) {
@@ -1063,11 +1175,11 @@ async function loadContribs() {
   }
 }
 
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 function renderContribs() {
   const container = document.getElementById('contrib-container');
-  const month     = parseInt(document.getElementById('con-month').value);
   const year      = parseInt(document.getElementById('con-year').value);
-  const monthName = new Date(year, month-1).toLocaleString('en', { month:'long' });
 
   if (!allMembers.length) {
     container.innerHTML = `<div class="empty-state">
@@ -1077,109 +1189,166 @@ function renderContribs() {
     return;
   }
 
-  // Build lookup map by memberId
+  // Build monthly lookup: key = memberId + '-' + month
   const cMap = {};
-  allContribs.forEach(c => { cMap[String(c.memberId)] = c; });
+  allContribs.forEach(c => {
+    cMap[String(c.memberId) + '-' + parseInt(c.month)] = c;
+  });
 
-  let paidCount = 0, noRecordCount = 0;
-  const cards = allMembers.map(m => {
-    const c         = cMap[String(m.localId)];
-    const hasRecord = !!c;
-    const isPaid    = hasRecord && c.status === 'Paid';
-    if (isPaid)      paidCount++;
-    if (!hasRecord)  noRecordCount++;
+  // Stats
+  let paidCount = 0;
+  allMembers.forEach(m => {
+    if (allContribs.some(c => String(c.memberId) === String(m.localId) && c.status === 'Paid'))
+      paidCount++;
+  });
+  document.getElementById('s-paid').textContent   = paidCount;
+  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount;
 
-    // Status badge
-    const badge = hasRecord
-      ? (isPaid
-          ? `<span class="badge-paid">✓ Paid</span>`
-          : `<span class="badge-unpaid">✗ Unpaid</span>`)
-      : `<span class="badge-neutral" style="opacity:0.7;">No record</span>`;
+  // Table header
+  const monthHeaders = MONTH_ABBR.map(mo =>
+    `<th title="${mo}">${mo}</th>`).join('');
 
-    // Amount line
-    const amountLine = hasRecord
-      ? `<span style="font-size:0.78rem;color:var(--muted);">$${c.amount || 30}</span>` : '';
+  // Member rows
+  const rows = allMembers.map(m => {
+    // Opening balance (month=0) — always from allContribsAll
+    const ob      = allContribsAll.find(c => String(c.memberId) === String(m.localId) && parseInt(c.month) === 0);
+    const obAmt   = ob ? (parseFloat(ob.amount) || 0) : 0;
+    const obLabel = ob ? `$${obAmt}` : '—';
+    const obCls   = ob ? '' : 'ob-empty';
+    const obDot   = (ob && ob.notes) ? '<span class="mc-dot"></span>' : '';
 
-    // Notes
-    const notesHtml = (hasRecord && c.notes)
-      ? `<div class="contrib-notes"><i class="bi bi-chat-left-text me-1"></i>${esc(c.notes)}</div>` : '';
+    // 12 monthly cells
+    let monthlyPaid = 0;
+    const monthCells = [1,2,3,4,5,6,7,8,9,10,11,12].map(mon => {
+      const c = cMap[String(m.localId) + '-' + mon];
+      if (!c) {
+        return `<td><div class="mc mc-empty"
+                    title="No record — click to add"
+                    onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${mon},${year})">—</div></td>`;
+      }
+      const isPaid = c.status === 'Paid';
+      if (isPaid) monthlyPaid += parseFloat(c.amount) || 0;
+      const cls   = isPaid ? 'mc-paid' : 'mc-unpaid';
+      const lbl   = `$${c.amount || 30}`;
+      const dot   = c.notes ? '<span class="mc-dot"></span>' : '';
+      const tip   = isPaid ? `Paid $${c.amount || 30}` : `Unpaid $${c.amount || 30}`;
+      return `<td><div class="mc ${cls}" title="${tip}${c.notes ? ' · ' + c.notes : ''}"
+                  onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${mon},${year})"
+                  >${lbl}${dot}</div></td>`;
+    }).join('');
 
-    // Meta (last updated by)
-    const metaHtml = (hasRecord && c.lastUpdated)
-      ? `<div class="contrib-meta">
-           <i class="bi bi-clock me-1"></i>${fmtTs(c.lastUpdated)}
-           ${c.changedBy ? `&nbsp;·&nbsp;<i class="bi bi-person me-1"></i>${esc(c.changedBy)}` : ''}
-         </div>` : '';
+    const total    = obAmt + monthlyPaid;
+    const totalCls = total > 0 ? 'cy-total' : 'cy-total cy-zero';
 
-    // Primary action button
-    const actionBtn = hasRecord
-      ? `<button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
-                 onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${month},${year})">
-           <i class="bi bi-pencil me-1"></i>Edit Payment
-         </button>`
-      : `<button class="contrib-toggle mark-paid"
-                 onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${month},${year})">
-           <i class="bi bi-plus-circle me-1"></i>Record Payment
-         </button>`;
-
-    // History button only if record exists
-    const historyBtn = hasRecord
-      ? `<button class="contrib-history-btn"
-                 onclick="showHistory('${esc(m.localId)}','${esc(m.name)}')">
-           <i class="bi bi-clock-history"></i> History
-         </button>` : '';
-
-    return `
-      <div class="contrib-card ${hasRecord ? (isPaid ? 'paid' : 'unpaid') : ''}">
-        <div class="d-flex justify-content-between align-items-start mb-1">
-          <div class="contrib-name">${esc(m.name)}</div>
-          ${badge}
-        </div>
-        ${notesHtml}${metaHtml}
-        <div class="d-flex justify-content-between align-items-center mt-2">
-          ${amountLine}
-          <div class="d-flex gap-1 ms-auto">
-            ${actionBtn}
-            ${historyBtn}
-          </div>
-        </div>
-      </div>`;
+    return `<tr id="cr-${esc(m.localId)}">
+      <td class="cy-name">
+        ${esc(m.name)}
+        ${m.email ? `<br><small style="color:var(--muted);font-weight:400;font-size:0.7rem;">${esc(m.email)}</small>` : ''}
+      </td>
+      <td title="Opening Balance${ob && ob.notes ? ' · ' + ob.notes : ''}">
+        <button class="ob-btn ${obCls}"
+                onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',0,0)">
+          ${obLabel}${obDot}
+        </button>
+      </td>
+      ${monthCells}
+      <td class="${totalCls}">$${total > 0 ? total : 0}</td>
+      <td>
+        <button class="contrib-history-btn"
+                onclick="showHistory('${esc(m.localId)}','${esc(m.name)}')">
+          <i class="bi bi-clock-history"></i>
+        </button>
+      </td>
+    </tr>`;
   }).join('');
 
-  container.innerHTML = `<div class="contrib-grid">${cards}</div>`;
-
-  // Update contribution stats
-  document.getElementById('s-paid').textContent   = paidCount;
-  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount - noRecordCount;
+  container.innerHTML = `
+    <div class="contrib-year-wrap">
+      <table class="contrib-year-table">
+        <thead>
+          <tr>
+            <th class="cy-name">Member</th>
+            <th title="Opening Balance — contributions before system tracking">Prev. Bal</th>
+            ${monthHeaders}
+            <th>Total</th>
+            <th>Log</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 /* ── Contribution change modal ─────────────────────────────── */
 
 function openContribModal(memberId, memberName, month, year) {
-  // Look up existing record for this member/month/year
-  const existing  = allContribs.find(c => String(c.memberId) === String(memberId));
-  const hasRecord = !!existing;
-  const initStatus = hasRecord ? (existing.status || 'Unpaid') : 'Paid';
+  const isOB = (parseInt(month) === 0);
 
-  cmState = { memberId, memberName, month, year, status: initStatus };
+  // Look up the correct existing record
+  let existing;
+  if (isOB) {
+    // Opening balance: month=0 stored in allContribsAll (not year-filtered)
+    existing = allContribsAll.find(c =>
+      String(c.memberId) === String(memberId) && parseInt(c.month) === 0
+    );
+  } else {
+    // Regular month: match by memberId AND specific month within current year's allContribs
+    existing = allContribs.find(c =>
+      String(c.memberId) === String(memberId) && parseInt(c.month) === parseInt(month)
+    );
+  }
 
-  const mName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
-  document.getElementById('cm-title').textContent =
-    hasRecord ? `Edit Payment — ${memberName}` : `Record Payment — ${memberName}`;
+  const hasRecord  = !!existing;
+  const initStatus = isOB ? 'Paid' : (hasRecord ? (existing.status || 'Unpaid') : 'Paid');
 
-  // Pre-fill existing values when editing, fresh defaults when recording new
+  cmState = { memberId, memberName, month: parseInt(month), year: parseInt(year), status: initStatus, isOB };
+
+  // ── Title ──
+  if (isOB) {
+    document.getElementById('cm-title').textContent = `Opening Balance — ${memberName}`;
+  } else {
+    const mName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('en', { month: 'long' });
+    document.getElementById('cm-title').textContent = hasRecord
+      ? `Edit Payment — ${memberName} · ${mName} ${year}`
+      : `Record Payment — ${memberName} · ${mName} ${year}`;
+  }
+
+  // ── Show/hide status toggle (hidden for Opening Balance — always Paid) ──
+  document.getElementById('cm-status-section').style.display = isOB ? 'none' : '';
+
+  // ── Notes label & placeholder ──
+  document.getElementById('cm-notes-label').innerHTML = isOB
+    ? 'NOTES <span style="font-weight:400;color:var(--muted);">(describe period covered, e.g. Jan–Jun 2023)</span>'
+    : 'NOTES <span style="font-weight:400;color:var(--muted);">(payment method, ref, or months covered)</span>';
+  document.getElementById('cm-notes').placeholder = isOB
+    ? 'e.g. Cash paid before system setup — covers Jan to Jun 2023'
+    : 'e.g. Bank transfer ref #123, covers Feb + March';
+
+  // ── Amount label + helper text ──
+  document.getElementById('cm-amount').previousElementSibling.innerHTML =
+    isOB ? 'OPENING BALANCE ($)' : 'AMOUNT RECEIVED ($)';
+  document.getElementById('cm-amount').nextElementSibling.textContent = isOB
+    ? 'Total amount paid before this system was set up. Use Notes to describe the period.'
+    : 'Default $30/month. Enter higher amount for catch-up payments (e.g. $60 for 2 months).';
+
+  // ── Pre-fill values ──
   document.getElementById('cm-notes').value  = hasRecord ? (existing.notes  || '') : '';
-  document.getElementById('cm-amount').value = hasRecord ? (existing.amount || 30)  : '30';
+  document.getElementById('cm-amount').value = hasRecord ? (existing.amount || (isOB ? 0 : 30)) : (isOB ? 0 : 30);
 
+  // ── Recorded by ──
   const name  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
   const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
   document.getElementById('cm-by').value = (name && email) ? `${name} (${email})` : (name || '');
 
-  // Update submit button label
-  const submitBtn = document.getElementById('cm-submit');
-  submitBtn.style.display = '';
-
   refreshCMButtons();
+
+  // For OB: override submit button text regardless of refreshCMButtons
+  if (isOB) {
+    const submitBtn = document.getElementById('cm-submit');
+    submitBtn.className = 'btn fw-bold btn-primary';
+    submitBtn.textContent = hasRecord ? '✎ Update Opening Balance' : '✓ Save Opening Balance';
+  }
+
   contribModalInst.show();
 }
 
@@ -1200,24 +1369,33 @@ function refreshCMButtons() {
 }
 
 async function submitContribChange() {
-  const { memberId, memberName, month, year, status } = cmState;
-  const notes     = document.getElementById('cm-notes').value.trim();
-  const changedBy = document.getElementById('cm-by').value.trim() || 'Admin';
-  const amount    = parseFloat(document.getElementById('cm-amount').value) || 30;
+  const { memberId, memberName, month, year, status, isOB } = cmState;
+  const notes       = document.getElementById('cm-notes').value.trim();
+  const changedBy   = document.getElementById('cm-by').value.trim() || 'Admin';
+  const amount      = parseFloat(document.getElementById('cm-amount').value) || 0;
+  const finalStatus = isOB ? 'Paid' : status;
+  const finalYear   = isOB ? 0 : year;  // Opening balance stored with year=0
 
   const btn      = document.getElementById('cm-submit');
   btn.disabled   = true;
   btn.textContent = 'Saving…';
 
-  apiWrite({ action: 'updateContribution', memberId, memberName, month, year,
-             amount, status, notes, changedBy });
+  apiWrite({
+    action: 'updateContribution',
+    memberId, memberName,
+    month,              // 0 for opening balance
+    year: finalYear,    // 0 for opening balance
+    amount, status: finalStatus, notes, changedBy
+  });
 
   await new Promise(r => setTimeout(r, 1300));
   contribModalInst.hide();
-  await Promise.all([loadContribs(), loadContribLog(), loadAllContribs()]);
+  // loadAllContribs must finish first — renderContribs() (called by loadContribs) needs it for OB lookup
+  await Promise.all([loadContribLog(), loadAllContribs()]);
+  await loadContribs(); // calls renderContribs() with fresh allContribsAll
 
   btn.disabled = false;
-  showToast(`${memberName} — payment saved as ${status} ✓`);
+  showToast(isOB ? `Opening balance saved for ${memberName} ✓` : `${memberName} — ${finalStatus} ✓`);
 }
 
 /* ── History modal ─────────────────────────────────────────── */
@@ -1238,12 +1416,16 @@ function showHistory(memberId, memberName) {
           </tr></thead>
           <tbody>
             ${entries.map(e => {
-              const mLabel = new Date(e.year, e.month - 1).toLocaleString('en', { month: 'short' });
+              const isOBEntry = parseInt(e.month) === 0;
+              const mLabel = isOBEntry
+                ? '<span style="color:#1a4a8a;font-weight:600;">Opening Balance</span>'
+                : new Date(parseInt(e.year), parseInt(e.month) - 1)
+                    .toLocaleString('en', { month: 'short' }) + ' ' + e.year;
               return `<tr>
                 <td style="white-space:nowrap;">${fmtTs(e.timestamp)}</td>
-                <td>${mLabel} ${e.year}</td>
+                <td>${mLabel}</td>
                 <td><span class="${e.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(e.status)}</span></td>
-                <td>$${e.amount || 30}</td>
+                <td>$${e.amount || 0}</td>
                 <td>${esc(e.notes || '—')}</td>
                 <td>${esc(e.changedBy || 'Admin')}</td>
               </tr>`;
