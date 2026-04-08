@@ -352,12 +352,11 @@
     <!-- Normal login -->
     <div id="login-form">
       <input type="text"     class="login-input" id="admin-name-login"
-             placeholder="Your name (for audit log)"
-             autocomplete="name"
-             style="margin-bottom:0.5rem;">
+             placeholder="Your name" autocomplete="name" style="margin-bottom:0.5rem;">
+      <input type="email"    class="login-input" id="admin-email-login"
+             placeholder="Your email" autocomplete="email" style="margin-bottom:0.5rem;">
       <input type="password" class="login-input" id="admin-pw"
-             placeholder="Admin password"
-             autocomplete="current-password"
+             placeholder="Admin password" autocomplete="current-password"
              onkeyup="if(event.key==='Enter') doLogin()">
       <button class="login-btn" onclick="doLogin()">
         <i class="bi bi-shield-lock me-2"></i>Login
@@ -368,9 +367,10 @@
     <!-- First-time setup (shown when no hash stored) -->
     <div class="setup-section" id="setup-section">
       <p><i class="bi bi-info-circle me-1"></i>First time? Create an admin password to get started.</p>
-      <input type="text"     class="login-input" id="setup-name" placeholder="Your name (for audit log)" autocomplete="name">
-      <input type="password" class="login-input" id="setup-pw"   placeholder="New password (min 4 chars)">
-      <input type="password" class="login-input" id="setup-pw2"  placeholder="Confirm password"
+      <input type="text"     class="login-input" id="setup-name"  placeholder="Your name" autocomplete="name">
+      <input type="email"    class="login-input" id="setup-email" placeholder="Your email" autocomplete="email">
+      <input type="password" class="login-input" id="setup-pw"    placeholder="New password (min 4 chars)">
+      <input type="password" class="login-input" id="setup-pw2"   placeholder="Confirm password"
              onkeyup="if(event.key==='Enter') doSetup()">
       <button class="login-btn green" onclick="doSetup()">
         <i class="bi bi-check2 me-2"></i>Set Password &amp; Login
@@ -555,13 +555,26 @@
           </div>
         </div>
 
+        <!-- Amount -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-amount">
+            AMOUNT RECEIVED ($)
+          </label>
+          <input type="number" class="form-control" id="cm-amount"
+                 value="30" min="0" step="0.01" style="border-radius:10px;">
+          <div class="form-text" style="font-size:0.76rem;color:var(--muted);">
+            Default $30/month. Enter higher amount if covering multiple months (e.g. $60 for two months).
+          </div>
+        </div>
+
         <!-- Notes -->
         <div class="mb-3">
           <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-notes">
-            NOTES <span style="font-weight:400;">(e.g. cash, bank transfer, waived)</span>
+            NOTES <span style="font-weight:400;">(e.g. covers Feb + March, cash / bank ref #123)</span>
           </label>
           <textarea class="form-control" id="cm-notes" rows="2"
-                    placeholder="Optional payment notes…" style="border-radius:10px;font-size:0.9rem;"></textarea>
+                    placeholder="Optional — payment method, reference, or which months this covers…"
+                    style="border-radius:10px;font-size:0.9rem;"></textarea>
         </div>
 
         <!-- Recorded by -->
@@ -606,8 +619,9 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
 
 /* ── Auth / identity keys ── */
-const AUTH_KEY       = 'pk_admin_hash';
-const ADMIN_NAME_KEY = 'pk_admin_name';
+const AUTH_KEY        = 'pk_admin_hash';
+const ADMIN_NAME_KEY  = 'pk_admin_name';
+const ADMIN_EMAIL_KEY = 'pk_admin_email';
 
 /* ── Runtime data ── */
 let allLogs       = [];
@@ -679,14 +693,16 @@ async function sha256(msg) {
    ════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   const hasHash    = !!localStorage.getItem(AUTH_KEY);
-  const savedName  = localStorage.getItem(ADMIN_NAME_KEY) || '';
+  const savedName  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
+  const savedEmail = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
 
   if (!hasHash) {
     document.getElementById('login-sub').textContent = 'First-time setup — create an admin password';
     document.getElementById('login-form').style.display    = 'none';
     document.getElementById('setup-section').style.display = 'block';
-  } else if (savedName) {
-    document.getElementById('admin-name-login').value = savedName;
+  } else {
+    if (savedName)  document.getElementById('admin-name-login').value  = savedName;
+    if (savedEmail) document.getElementById('admin-email-login').value = savedEmail;
   }
 
   contribModalInst = new bootstrap.Modal(document.getElementById('contribModal'));
@@ -700,12 +716,14 @@ document.addEventListener('DOMContentLoaded', () => {
 async function doLogin() {
   const pw     = document.getElementById('admin-pw').value;
   const name   = document.getElementById('admin-name-login').value.trim();
+  const email  = document.getElementById('admin-email-login').value.trim();
   const stored = localStorage.getItem(AUTH_KEY);
   if (!pw || !stored) return;
 
   const hash = await sha256(pw);
   if (hash === stored) {
-    if (name) localStorage.setItem(ADMIN_NAME_KEY, name);
+    if (name)  localStorage.setItem(ADMIN_NAME_KEY, name);
+    if (email) localStorage.setItem(ADMIN_EMAIL_KEY, email);
     enterAdmin();
   } else {
     document.getElementById('login-error').style.display = 'block';
@@ -716,6 +734,7 @@ async function doLogin() {
 
 async function doSetup() {
   const name  = document.getElementById('setup-name').value.trim();
+  const email = document.getElementById('setup-email').value.trim();
   const pw    = document.getElementById('setup-pw').value;
   const pw2   = document.getElementById('setup-pw2').value;
   const errEl = document.getElementById('setup-error');
@@ -732,7 +751,8 @@ async function doSetup() {
 
   const hash = await sha256(pw);
   localStorage.setItem(AUTH_KEY, hash);
-  if (name) localStorage.setItem(ADMIN_NAME_KEY, name);
+  if (name)  localStorage.setItem(ADMIN_NAME_KEY, name);
+  if (email) localStorage.setItem(ADMIN_EMAIL_KEY, email);
   enterAdmin();
 }
 
@@ -741,8 +761,10 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('admin-pw').value = '';
 
-  const savedName = localStorage.getItem(ADMIN_NAME_KEY) || '';
-  document.getElementById('admin-name-login').value = savedName;
+  const savedName  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
+  const savedEmail = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
+  document.getElementById('admin-name-login').value  = savedName;
+  document.getElementById('admin-email-login').value = savedEmail;
 
   const hasHash = !!localStorage.getItem(AUTH_KEY);
   if (hasHash) {
@@ -755,8 +777,10 @@ function doLogout() {
 function enterAdmin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('admin-panel').style.display  = 'block';
+  const name  = localStorage.getItem(ADMIN_NAME_KEY)  || 'Admin';
+  const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
   document.getElementById('navbar-admin-name').textContent =
-    localStorage.getItem(ADMIN_NAME_KEY) || 'Admin';
+    email ? `${name} (${email})` : name;
   initDashboard();
 }
 
@@ -987,7 +1011,7 @@ function renderContribs() {
         </div>
         ${notesHtml}${metaHtml}
         <div class="d-flex justify-content-between align-items-center mt-2">
-          <span style="font-size:0.78rem;color:var(--muted);">${monthName} ${year} · $30</span>
+          <span style="font-size:0.78rem;color:var(--muted);">${monthName} ${year}${c && c.amount ? ` · $${c.amount}` : ' · $30'}</span>
           <div class="d-flex gap-1">
             <button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
                     onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${isPaid},${month},${year})">
@@ -1014,9 +1038,14 @@ function renderContribs() {
 function openContribModal(memberId, memberName, currentlyPaid, month, year) {
   cmState = { memberId, memberName, month, year, status: currentlyPaid ? 'Unpaid' : 'Paid' };
   const mName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
-  document.getElementById('cm-title').textContent  = `${memberName} — ${mName} ${year}`;
-  document.getElementById('cm-notes').value        = '';
-  document.getElementById('cm-by').value           = localStorage.getItem(ADMIN_NAME_KEY) || '';
+  document.getElementById('cm-title').textContent = `${memberName} — ${mName} ${year}`;
+  document.getElementById('cm-notes').value       = '';
+  document.getElementById('cm-amount').value      = '30';
+
+  const name  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
+  const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
+  document.getElementById('cm-by').value = (name && email) ? `${name} (${email})` : (name || '');
+
   refreshCMButtons();
   contribModalInst.show();
 }
@@ -1041,17 +1070,14 @@ async function submitContribChange() {
   const { memberId, memberName, month, year, status } = cmState;
   const notes     = document.getElementById('cm-notes').value.trim();
   const changedBy = document.getElementById('cm-by').value.trim() || 'Admin';
-
-  // Persist admin name for future use
-  localStorage.setItem(ADMIN_NAME_KEY, changedBy);
-  document.getElementById('navbar-admin-name').textContent = changedBy;
+  const amount    = parseFloat(document.getElementById('cm-amount').value) || 30;
 
   const btn      = document.getElementById('cm-submit');
   btn.disabled   = true;
   btn.textContent = 'Saving…';
 
   apiWrite({ action: 'updateContribution', memberId, memberName, month, year,
-             amount: 30, status, notes, changedBy });
+             amount, status, notes, changedBy });
 
   await new Promise(r => setTimeout(r, 1300));
   contribModalInst.hide();
