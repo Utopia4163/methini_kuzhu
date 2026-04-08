@@ -105,20 +105,6 @@
     .pk-name  { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.2rem; }
     .pk-role  { font-size: 0.9rem; color: var(--orange); }
 
-    /* ── Location pill ── */
-    .pk-location {
-      display: none;                 /* shown via JS if ?location param present */
-      align-items: center;
-      gap: 0.4rem;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 0.35rem 0.9rem;
-      font-size: 0.82rem;
-      color: var(--muted);
-      margin-bottom: 1.1rem;
-    }
-
     /* ── Action button ── */
     .pk-btn {
       width: 100%;
@@ -262,12 +248,6 @@
     <div class="pk-card">
       <div class="pk-avatar" id="member-avatar">?</div>
       <div class="pk-name"   id="member-name">…</div>
-      <div class="pk-role"   id="member-role">Member</div>
-    </div>
-
-    <div class="pk-location" id="loc-badge-ret">
-      <i class="bi bi-geo-alt-fill"></i>
-      <span id="loc-text-ret"></span>
     </div>
 
     <button class="pk-btn" id="btn-ret" onclick="markAttendanceReturning()">
@@ -285,11 +265,6 @@
     <div class="pk-welcome">
       <h2>Welcome! 👋</h2>
       <p>First time here? Tap the button to register<br>and mark your attendance instantly.</p>
-    </div>
-
-    <div class="pk-location" id="loc-badge-new">
-      <i class="bi bi-geo-alt-fill"></i>
-      <span id="loc-text-new"></span>
     </div>
 
     <button class="pk-btn" id="btn-new" onclick="showRegModal()">
@@ -352,27 +327,6 @@
           <div class="invalid-feedback">Please enter your name.</div>
         </div>
 
-        <!-- Instrument -->
-        <div class="mb-3">
-          <label class="form-label" for="reg-instrument">
-            Instrument / Role <span style="color:var(--red)">*</span>
-          </label>
-          <select class="form-select" id="reg-instrument">
-            <option value="" disabled selected>Select your instrument or role</option>
-            <option value="Parai">Parai (Drum)</option>
-            <option value="Thavil">Thavil</option>
-            <option value="Nadaswaram">Nadaswaram</option>
-            <option value="Kanjira">Kanjira</option>
-            <option value="Udukkai">Udukkai</option>
-            <option value="Vocalist">Vocalist</option>
-            <option value="Dancer">Dancer</option>
-            <option value="Learner">Learner / New Member</option>
-            <option value="Organiser">Organiser</option>
-            <option value="Other">Other</option>
-          </select>
-          <div class="invalid-feedback">Please select your instrument.</div>
-        </div>
-
         <!-- Email (optional) -->
         <div class="mb-1">
           <label class="form-label" for="reg-email">
@@ -403,52 +357,10 @@
    ════════════════════════════════════════════════════════════ */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
 
-/* ════════════════════════════════════════════════════════════
-   API helpers
-   ─────────────────────────────────────────────────────────
-   Apps Script redirects through script.googleusercontent.com
-   which strips CORS headers. Two workarounds are used:
-     • Writes  → fetch with mode:'no-cors' (fire-and-forget)
-     • Reads   → JSONP via <script> tag (bypasses CORS entirely)
-   ════════════════════════════════════════════════════════════ */
-
-/** Fire-and-forget write — we don't need the response for writes. */
+/* ── API helpers ── */
 function apiWrite(params) {
   const url = `${SCRIPT_URL}?${new URLSearchParams(params)}`;
-  fetch(url, { mode: 'no-cors' }).catch(() => {}); // silent fail; data saved locally
-}
-
-/** JSONP read — returns a Promise that resolves with the parsed data. */
-function apiRead(params, timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
-    const cb   = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
-    const url  = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
-    const el   = document.createElement('script');
-    let timer;
-
-    window[cb] = (data) => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      resolve(data);
-    };
-
-    el.onerror = () => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      reject(new Error('Network error — could not reach the server.'));
-    };
-
-    timer = setTimeout(() => {
-      el.remove();
-      delete window[cb];
-      reject(new Error('Request timed out. Check your internet connection.'));
-    }, timeoutMs);
-
-    el.src = url;
-    document.head.appendChild(el);
-  });
+  fetch(url, { mode: 'no-cors' }).catch(() => {});
 }
 
 /* ── Storage keys ── */
@@ -456,34 +368,19 @@ const KEY_ID   = 'pk_member_id';
 const KEY_DATA = 'pk_member_data';
 
 /* ── Runtime ── */
-let member       = null;   // { localId, name, instrument, email }
-let venueLocation = '';
-let regModal     = null;
+let member   = null;   // { localId, name, email }
+let regModal = null;
 
 /* ════════════════════════════════════════════════════════════
    Init
    ════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   regModal = new bootstrap.Modal(document.getElementById('regModal'));
-
-  // Parse ?location= URL param
-  const params   = new URLSearchParams(window.location.search);
-  venueLocation  = params.get('location') || '';
-
-  if (venueLocation) {
-    const display = venueLocation.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    document.getElementById('loc-text-ret').textContent = display;
-    document.getElementById('loc-text-new').textContent = display;
-    document.getElementById('loc-badge-ret').style.display = 'flex';
-    document.getElementById('loc-badge-new').style.display = 'flex';
-  }
-
   init();
 });
 
 async function init() {
   setState('loading');
-
   const savedId   = localStorage.getItem(KEY_ID);
   const savedData = localStorage.getItem(KEY_DATA);
 
@@ -510,11 +407,16 @@ function setState(name) {
 }
 
 function showReturning() {
+  // Always reset the attendance button (fixes spinner persisting after Done)
+  const btn = document.getElementById('btn-ret');
+  btn.innerHTML = '<i class="bi bi-check2-circle" style="font-size:1.4rem;"></i> Mark Attendance';
+  btn.classList.remove('pk-btn-loading');
+  btn.disabled  = false;
+
   const name     = member.name || 'Member';
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   document.getElementById('member-avatar').textContent = initials;
   document.getElementById('member-name').textContent   = name;
-  document.getElementById('member-role').textContent   = member.instrument || 'Member';
   setState('returning');
 }
 
@@ -529,17 +431,12 @@ function markAttendanceReturning() {
   const btn = document.getElementById('btn-ret');
   setBtnLoading(btn, true, 'Recording…');
 
-  // Fire-and-forget write (no-cors bypasses the Apps Script CORS redirect).
-  // We show success immediately — the sheet write happens in the background.
   apiWrite({
-    action:     'recordAttendance',
-    localId:    member.localId || localStorage.getItem(KEY_ID) || '',
-    name:       member.name,
-    instrument: member.instrument || '',
-    location:   venueLocation || 'Not specified',
+    action:  'recordAttendance',
+    localId: member.localId || localStorage.getItem(KEY_ID) || '',
+    name:    member.name,
   });
 
-  // Small delay so the spinner is visible, then show success.
   setTimeout(() => showSuccess(member.name, false), 600);
 }
 
@@ -547,11 +444,9 @@ function markAttendanceReturning() {
    Registration — new member
    ════════════════════════════════════════════════════════════ */
 function showRegModal() {
-  document.getElementById('reg-name').value       = '';
-  document.getElementById('reg-instrument').value = '';
-  document.getElementById('reg-email').value      = '';
+  document.getElementById('reg-name').value  = '';
+  document.getElementById('reg-email').value = '';
   document.getElementById('reg-name').classList.remove('is-invalid');
-  document.getElementById('reg-instrument').classList.remove('is-invalid');
   regModal.show();
   setTimeout(() => document.getElementById('reg-name').focus(), 350);
 }
@@ -561,43 +456,27 @@ function cancelReg() {
 }
 
 function submitReg() {
-  const name       = document.getElementById('reg-name').value.trim();
-  const instrument = document.getElementById('reg-instrument').value;
-  const email      = document.getElementById('reg-email').value.trim();
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
 
-  let valid = true;
   if (!name) {
     document.getElementById('reg-name').classList.add('is-invalid');
-    valid = false;
-  } else {
-    document.getElementById('reg-name').classList.remove('is-invalid');
+    return;
   }
-  if (!instrument) {
-    document.getElementById('reg-instrument').classList.add('is-invalid');
-    valid = false;
-  } else {
-    document.getElementById('reg-instrument').classList.remove('is-invalid');
-  }
-  if (!valid) return;
+  document.getElementById('reg-name').classList.remove('is-invalid');
 
   const btn     = document.getElementById('btn-reg-submit');
   btn.disabled  = true;
   btn.innerHTML = '<div class="pk-btn-spinner" style="width:18px;height:18px;border-width:2px;"></div> Saving…';
 
   const localId = generateUUID();
-
-  // 1 — Save to localStorage immediately (optimistic).
-  //     The sheet write is fire-and-forget via no-cors to avoid CORS errors.
-  member = { localId, name, instrument, email };
+  member = { localId, name, email };
   localStorage.setItem(KEY_ID,   localId);
   localStorage.setItem(KEY_DATA, JSON.stringify(member));
 
-  // 2 — Write member + attendance to the Sheet in the background.
-  apiWrite({ action: 'registerMember',   localId, name, instrument, email: email || '' });
-  apiWrite({ action: 'recordAttendance', localId, name, instrument,
-             location: venueLocation || 'Not specified' });
+  apiWrite({ action: 'registerMember',   localId, name, instrument: '', email: email || '' });
+  apiWrite({ action: 'recordAttendance', localId, name });
 
-  // 3 — Show success after a short delay (lets spinner show briefly).
   setTimeout(() => {
     regModal.hide();
     showSuccess(name, true);
@@ -608,16 +487,12 @@ function submitReg() {
    Success
    ════════════════════════════════════════════════════════════ */
 function showSuccess(name, isNew) {
-  const now   = new Date();
-  const time  = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-  const date  = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const now  = new Date();
+  const time = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+  const date = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
 
   let msg = `${isNew ? 'Welcome to the Kuzhu, ' : 'Great to see you, '}<strong>${escHtml(name)}</strong>!<br>`;
   msg    += `Recorded at ${time} on ${date}.`;
-  if (venueLocation) {
-    const display = venueLocation.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    msg += `<br><small><i class="bi bi-geo-alt-fill"></i> ${display}</small>`;
-  }
 
   document.getElementById('success-msg').innerHTML = msg;
   setState('success');
@@ -646,7 +521,7 @@ function generateUUID() {
 
 function setBtnLoading(btn, loading, label) {
   if (loading) {
-    btn._orig    = btn.innerHTML;
+    btn._orig     = btn.innerHTML;
     btn.innerHTML = `<div class="pk-btn-spinner"></div><span>${label || 'Loading…'}</span>`;
     btn.classList.add('pk-btn-loading');
     btn.disabled  = true;
