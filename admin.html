@@ -255,13 +255,17 @@
     }
     .contrib-card.paid   { border-top-color: var(--green); }
     .contrib-card.unpaid { border-top-color: var(--red);   }
-    .contrib-name { font-weight: 700; font-size: 1rem; }
-    .contrib-role { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .contrib-name  { font-weight: 700; font-size: 1rem; }
+    .contrib-role  { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .contrib-notes { font-size: 0.8rem; color: #5a4030; background: #fdf6f0;
+                     border-radius: 6px; padding: 0.3rem 0.6rem; margin-bottom: 0.4rem;
+                     border-left: 3px solid var(--orange); }
+    .contrib-meta  { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.5rem; }
     .contrib-toggle {
       border: none;
       border-radius: 8px;
-      padding: 0.3rem 0.75rem;
-      font-size: 0.8rem;
+      padding: 0.3rem 0.65rem;
+      font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
       transition: opacity 0.15s;
@@ -269,6 +273,32 @@
     .contrib-toggle:hover { opacity: 0.8; }
     .contrib-toggle.mark-paid   { background: #d5f5e3; color: #1a7a3c; }
     .contrib-toggle.mark-unpaid { background: #fde8e8; color: #b03020; }
+    .contrib-history-btn {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.28rem 0.6rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: none;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .contrib-history-btn:hover { background: var(--bg); color: var(--text); }
+
+    /* Contrib change / history modals */
+    .ck-modal .modal-content { border-radius: 18px; }
+    .ck-modal .modal-header  { border-bottom: 1px solid var(--border); }
+    .ck-modal .modal-footer  { border-top: 1px solid var(--border); }
+    .status-toggle-btn       { border-radius: 10px; font-weight: 600; font-size: 0.9rem;
+                               padding: 0.45rem 1.1rem; border: 2px solid transparent; }
+    .history-table td, .history-table th { font-size: 0.82rem; vertical-align: middle; }
+    .history-table thead th { background: #f8f0e8; color: var(--text); font-weight: 600; }
+
+    /* Members tab payment pill */
+    .pay-pill { display: inline-flex; align-items: center; gap: 0.3rem;
+                background: #f0e8e0; border-radius: 8px; padding: 0.2rem 0.55rem;
+                font-size: 0.75rem; font-weight: 600; color: #604030; }
+    .pay-pill.all-paid { background: #d5f5e3; color: #1a7a3c; }
 
     /* Spinner */
     .pk-spinner {
@@ -321,8 +351,12 @@
 
     <!-- Normal login -->
     <div id="login-form">
+      <input type="text"     class="login-input" id="admin-name-login"
+             placeholder="Your name (for audit log)"
+             autocomplete="name"
+             style="margin-bottom:0.5rem;">
       <input type="password" class="login-input" id="admin-pw"
-             placeholder="Enter admin password"
+             placeholder="Admin password"
              autocomplete="current-password"
              onkeyup="if(event.key==='Enter') doLogin()">
       <button class="login-btn" onclick="doLogin()">
@@ -334,8 +368,9 @@
     <!-- First-time setup (shown when no hash stored) -->
     <div class="setup-section" id="setup-section">
       <p><i class="bi bi-info-circle me-1"></i>First time? Create an admin password to get started.</p>
-      <input type="password" class="login-input" id="setup-pw"  placeholder="New password (min 4 chars)">
-      <input type="password" class="login-input" id="setup-pw2" placeholder="Confirm password"
+      <input type="text"     class="login-input" id="setup-name" placeholder="Your name (for audit log)" autocomplete="name">
+      <input type="password" class="login-input" id="setup-pw"   placeholder="New password (min 4 chars)">
+      <input type="password" class="login-input" id="setup-pw2"  placeholder="Confirm password"
              onkeyup="if(event.key==='Enter') doSetup()">
       <button class="login-btn green" onclick="doSetup()">
         <i class="bi bi-check2 me-2"></i>Set Password &amp; Login
@@ -352,7 +387,9 @@
   <nav class="pk-navbar">
     <span class="pk-brand">🥁 Parai Kuzhu</span>
     <div style="display:flex;align-items:center;gap:0.75rem;">
-      <span style="color:#6a4020;font-size:0.78rem;">Admin</span>
+      <span style="color:#9a7050;font-size:0.8rem;">
+        <i class="bi bi-person-circle me-1"></i><span id="navbar-admin-name">Admin</span>
+      </span>
       <button class="pk-logout" onclick="doLogout()">
         <i class="bi bi-box-arrow-right"></i> Logout
       </button>
@@ -457,10 +494,12 @@
                 <th>Email</th>
                 <th>Joined</th>
                 <th>Sessions</th>
+                <th>Payments (paid / total)</th>
+                <th>Total Collected</th>
               </tr>
             </thead>
             <tbody id="mem-body">
-              <tr><td colspan="6" class="text-center py-4 text-muted">
+              <tr><td colspan="8" class="text-center py-4 text-muted">
                 <span class="pk-spinner"></span>&nbsp; Loading…
               </td></tr>
             </tbody>
@@ -497,6 +536,68 @@
 <!-- Toast -->
 <div class="pk-toast" id="toast"></div>
 
+<!-- ══ CONTRIBUTION CHANGE MODAL ══════════════════════════════ -->
+<div class="modal fade ck-modal" id="contribModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold" id="cm-title">Update Contribution</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+
+        <!-- Status toggle -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">STATUS</label>
+          <div class="d-flex gap-2">
+            <button class="status-toggle-btn" id="cm-btn-paid"   onclick="setCMStatus('Paid')">✓ Paid</button>
+            <button class="status-toggle-btn" id="cm-btn-unpaid" onclick="setCMStatus('Unpaid')">✗ Unpaid</button>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-notes">
+            NOTES <span style="font-weight:400;">(e.g. cash, bank transfer, waived)</span>
+          </label>
+          <textarea class="form-control" id="cm-notes" rows="2"
+                    placeholder="Optional payment notes…" style="border-radius:10px;font-size:0.9rem;"></textarea>
+        </div>
+
+        <!-- Recorded by -->
+        <div class="mb-1">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="cm-by">
+            RECORDED BY
+          </label>
+          <input type="text" class="form-control" id="cm-by"
+                 placeholder="Your name" style="border-radius:10px;">
+        </div>
+
+      </div>
+      <div class="modal-footer px-4 pb-4 pt-3">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Cancel</button>
+        <button class="btn fw-bold" id="cm-submit" onclick="submitContribChange()"
+                style="border-radius:10px;min-width:140px;">Save Change</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ HISTORY MODAL ═════════════════════════════════════════ -->
+<div class="modal fade ck-modal" id="historyModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold" id="hm-title">Payment History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-3 pb-4" id="hm-body">
+        <div class="text-center py-3 text-muted"><span class="pk-spinner"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
@@ -504,8 +605,21 @@
    ════════════════════════════════════════════════════════════ */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
 
-/* ── Auth key ── */
-const AUTH_KEY = 'pk_admin_hash';
+/* ── Auth / identity keys ── */
+const AUTH_KEY       = 'pk_admin_hash';
+const ADMIN_NAME_KEY = 'pk_admin_name';
+
+/* ── Runtime data ── */
+let allLogs       = [];
+let allMembers    = [];
+let allContribs   = [];    // current month/year view
+let allContribsAll = [];   // all months (for member payment totals)
+let allContribLog  = [];   // full immutable audit trail
+
+/* ── Modal instances & contribution-change state ── */
+let contribModalInst = null;
+let historyModalInst = null;
+let cmState = { memberId: '', memberName: '', month: 0, year: 0, status: 'Paid' };
 
 /* ════════════════════════════════════════════════════════════
    API helpers — CORS workaround for Apps Script
@@ -569,15 +683,19 @@ async function sha256(msg) {
    Boot
    ════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
-  const hasHash = !!localStorage.getItem(AUTH_KEY);
+  const hasHash    = !!localStorage.getItem(AUTH_KEY);
+  const savedName  = localStorage.getItem(ADMIN_NAME_KEY) || '';
 
   if (!hasHash) {
-    // First-time setup
     document.getElementById('login-sub').textContent = 'First-time setup — create an admin password';
-    document.getElementById('login-form').style.display   = 'none';
+    document.getElementById('login-form').style.display    = 'none';
     document.getElementById('setup-section').style.display = 'block';
+  } else if (savedName) {
+    document.getElementById('admin-name-login').value = savedName;
   }
 
+  contribModalInst = new bootstrap.Modal(document.getElementById('contribModal'));
+  historyModalInst = new bootstrap.Modal(document.getElementById('historyModal'));
   setupMonthYear();
 });
 
@@ -586,11 +704,13 @@ document.addEventListener('DOMContentLoaded', () => {
    ════════════════════════════════════════════════════════════ */
 async function doLogin() {
   const pw     = document.getElementById('admin-pw').value;
+  const name   = document.getElementById('admin-name-login').value.trim();
   const stored = localStorage.getItem(AUTH_KEY);
   if (!pw || !stored) return;
 
   const hash = await sha256(pw);
   if (hash === stored) {
+    if (name) localStorage.setItem(ADMIN_NAME_KEY, name);
     enterAdmin();
   } else {
     document.getElementById('login-error').style.display = 'block';
@@ -600,8 +720,9 @@ async function doLogin() {
 }
 
 async function doSetup() {
-  const pw   = document.getElementById('setup-pw').value;
-  const pw2  = document.getElementById('setup-pw2').value;
+  const name  = document.getElementById('setup-name').value.trim();
+  const pw    = document.getElementById('setup-pw').value;
+  const pw2   = document.getElementById('setup-pw2').value;
   const errEl = document.getElementById('setup-error');
 
   if (!pw || pw.length < 4) {
@@ -616,18 +737,21 @@ async function doSetup() {
 
   const hash = await sha256(pw);
   localStorage.setItem(AUTH_KEY, hash);
+  if (name) localStorage.setItem(ADMIN_NAME_KEY, name);
   enterAdmin();
 }
 
 function doLogout() {
-  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('admin-panel').style.display  = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('admin-pw').value = '';
 
-  // Re-check if setup form needed
+  const savedName = localStorage.getItem(ADMIN_NAME_KEY) || '';
+  document.getElementById('admin-name-login').value = savedName;
+
   const hasHash = !!localStorage.getItem(AUTH_KEY);
   if (hasHash) {
-    document.getElementById('login-form').style.display   = 'block';
+    document.getElementById('login-form').style.display    = 'block';
     document.getElementById('setup-section').style.display = 'none';
     document.getElementById('login-sub').textContent = 'Admin Dashboard';
   }
@@ -636,6 +760,8 @@ function doLogout() {
 function enterAdmin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('admin-panel').style.display  = 'block';
+  document.getElementById('navbar-admin-name').textContent =
+    localStorage.getItem(ADMIN_NAME_KEY) || 'Admin';
   initDashboard();
 }
 
@@ -643,7 +769,7 @@ function enterAdmin() {
    Dashboard
    ════════════════════════════════════════════════════════════ */
 async function initDashboard() {
-  await Promise.all([loadLogs(), loadMembers()]);
+  await Promise.all([loadLogs(), loadMembers(), loadContribLog(), loadAllContribs()]);
   updateTopStats();
   loadContribs();
 }
@@ -654,6 +780,20 @@ async function refreshAll() {
   await initDashboard();
   btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
   showToast('Dashboard refreshed ✓');
+}
+
+async function loadAllContribs() {
+  try {
+    const data     = await apiRead({ action: 'getContributions' }); // no filter = all months
+    allContribsAll = data.contributions || [];
+  } catch { allContribsAll = []; }
+}
+
+async function loadContribLog() {
+  try {
+    const data    = await apiRead({ action: 'getContribLog' });
+    allContribLog = data.log || [];
+  } catch { allContribLog = []; }
 }
 
 /* ── Tabs ── */
@@ -750,7 +890,12 @@ function renderMembers() {
   allLogs.forEach(l => { countMap[l.localid] = (countMap[l.localid] || 0) + 1; });
 
   body.innerHTML = allMembers.map((m, i) => {
-    const cnt = countMap[m.localId] || 0;
+    const cnt        = countMap[m.localId] || 0;
+    const mContribs  = allContribsAll.filter(c => String(c.memberId) === String(m.localId));
+    const paidMonths = mContribs.filter(c => c.status === 'Paid');
+    const totalPaid  = paidMonths.reduce((s, c) => s + (Number(c.amount) || 30), 0);
+    const allPaid    = mContribs.length > 0 && paidMonths.length === mContribs.length;
+
     return `<tr>
       <td style="color:var(--muted);">${i+1}</td>
       <td><strong>${esc(m.name)}</strong></td>
@@ -758,6 +903,10 @@ function renderMembers() {
       <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
       <td style="font-size:0.83rem;color:var(--muted);">${esc(m.joinDate || '–')}</td>
       <td><span class="badge-neutral">${cnt} session${cnt !== 1 ? 's' : ''}</span></td>
+      <td><span class="pay-pill ${allPaid && mContribs.length ? 'all-paid' : ''}">
+            ${paidMonths.length} / ${mContribs.length} months
+          </span></td>
+      <td style="font-weight:600;color:var(--green);">$${totalPaid}</td>
     </tr>`;
   }).join('');
 }
@@ -822,9 +971,17 @@ function renderContribs() {
     const isPaid = c && c.status === 'Paid';
     if (isPaid) paidCount++;
 
+    const notesHtml = (c && c.notes)
+      ? `<div class="contrib-notes"><i class="bi bi-chat-left-text me-1"></i>${esc(c.notes)}</div>` : '';
+    const metaHtml  = (c && c.lastUpdated)
+      ? `<div class="contrib-meta">
+           <i class="bi bi-clock me-1"></i>${fmtTs(c.lastUpdated)}
+           ${c.changedBy ? `&nbsp;·&nbsp;<i class="bi bi-person me-1"></i>${esc(c.changedBy)}` : ''}
+         </div>` : '';
+
     return `
       <div class="contrib-card ${isPaid ? 'paid' : 'unpaid'}">
-        <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="d-flex justify-content-between align-items-start">
           <div>
             <div class="contrib-name">${esc(m.name)}</div>
             <div class="contrib-role">${esc(m.instrument || 'Member')}</div>
@@ -833,12 +990,19 @@ function renderContribs() {
             ${isPaid ? '✓ Paid' : '✗ Unpaid'}
           </span>
         </div>
-        <div class="d-flex justify-content-between align-items-center">
-          <span style="font-size:0.8rem;color:var(--muted);">${monthName} ${year} · $30</span>
-          <button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
-                  onclick="toggleContrib('${esc(m.localId)}','${esc(m.name)}',${isPaid})">
-            ${isPaid ? '✗ Mark Unpaid' : '✓ Mark Paid'}
-          </button>
+        ${notesHtml}${metaHtml}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span style="font-size:0.78rem;color:var(--muted);">${monthName} ${year} · $30</span>
+          <div class="d-flex gap-1">
+            <button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
+                    onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${isPaid},${month},${year})">
+              ${isPaid ? '✗ Unpaid' : '✓ Paid'}
+            </button>
+            <button class="contrib-history-btn"
+                    onclick="showHistory('${esc(m.localId)}','${esc(m.name)}')">
+              <i class="bi bi-clock-history"></i> History
+            </button>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -850,50 +1014,118 @@ function renderContribs() {
   document.getElementById('s-unpaid').textContent = allMembers.length - paidCount;
 }
 
-async function toggleContrib(memberId, memberName, currentlyPaid) {
-  const month     = document.getElementById('con-month').value;
-  const year      = document.getElementById('con-year').value;
-  const newStatus = currentlyPaid ? 'Unpaid' : 'Paid';
+/* ── Contribution change modal ─────────────────────────────── */
 
-  try {
-    // Write via no-cors (fire-and-forget), then re-read to confirm.
-    apiWrite({ action: 'updateContribution', memberId, memberName, month, year, amount: 30, status: newStatus });
-    // Brief pause to allow the sheet write to complete before re-reading.
-    await new Promise(r => setTimeout(r, 1200));
-    await loadContribs();
-    showToast(`${memberName} marked as ${newStatus}`);
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
+function openContribModal(memberId, memberName, currentlyPaid, month, year) {
+  cmState = { memberId, memberName, month, year, status: currentlyPaid ? 'Unpaid' : 'Paid' };
+  const mName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
+  document.getElementById('cm-title').textContent  = `${memberName} — ${mName} ${year}`;
+  document.getElementById('cm-notes').value        = '';
+  document.getElementById('cm-by').value           = localStorage.getItem(ADMIN_NAME_KEY) || '';
+  refreshCMButtons();
+  contribModalInst.show();
 }
+
+function setCMStatus(status) {
+  cmState.status = status;
+  refreshCMButtons();
+}
+
+function refreshCMButtons() {
+  const paid   = cmState.status === 'Paid';
+  const btnP   = document.getElementById('cm-btn-paid');
+  const btnU   = document.getElementById('cm-btn-unpaid');
+  const submit = document.getElementById('cm-submit');
+  btnP.className   = `status-toggle-btn ${paid  ? 'btn btn-success' : 'btn btn-outline-secondary'}`;
+  btnU.className   = `status-toggle-btn ${!paid ? 'btn btn-danger'  : 'btn btn-outline-secondary'}`;
+  submit.className = `btn fw-bold ${paid ? 'btn-success' : 'btn-danger'}`;
+  submit.textContent = paid ? '✓ Mark as Paid' : '✗ Mark as Unpaid';
+}
+
+async function submitContribChange() {
+  const { memberId, memberName, month, year, status } = cmState;
+  const notes     = document.getElementById('cm-notes').value.trim();
+  const changedBy = document.getElementById('cm-by').value.trim() || 'Admin';
+
+  // Persist admin name for future use
+  localStorage.setItem(ADMIN_NAME_KEY, changedBy);
+  document.getElementById('navbar-admin-name').textContent = changedBy;
+
+  const btn      = document.getElementById('cm-submit');
+  btn.disabled   = true;
+  btn.textContent = 'Saving…';
+
+  apiWrite({ action: 'updateContribution', memberId, memberName, month, year,
+             amount: 30, status, notes, changedBy });
+
+  await new Promise(r => setTimeout(r, 1300));
+  contribModalInst.hide();
+  await Promise.all([loadContribs(), loadContribLog(), loadAllContribs()]);
+
+  btn.disabled = false;
+  showToast(`${memberName} marked as ${status} ✓`);
+}
+
+/* ── History modal ─────────────────────────────────────────── */
+
+function showHistory(memberId, memberName) {
+  document.getElementById('hm-title').textContent = `Audit Trail — ${memberName}`;
+  const entries = allContribLog.filter(e => String(e.memberId) === String(memberId));
+
+  if (!entries.length) {
+    document.getElementById('hm-body').innerHTML =
+      '<div class="text-center text-muted py-4">No history recorded yet for this member.</div>';
+  } else {
+    document.getElementById('hm-body').innerHTML = `
+      <div class="table-responsive">
+        <table class="table table-sm history-table mb-0">
+          <thead><tr>
+            <th>Date &amp; Time</th><th>Month</th><th>Status</th><th>Amount</th><th>Notes</th><th>Recorded by</th>
+          </tr></thead>
+          <tbody>
+            ${entries.map(e => {
+              const mLabel = new Date(e.year, e.month - 1).toLocaleString('en', { month: 'short' });
+              return `<tr>
+                <td style="white-space:nowrap;">${fmtTs(e.timestamp)}</td>
+                <td>${mLabel} ${e.year}</td>
+                <td><span class="${e.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(e.status)}</span></td>
+                <td>$${e.amount || 30}</td>
+                <td>${esc(e.notes || '—')}</td>
+                <td>${esc(e.changedBy || 'Admin')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  historyModalInst.show();
+}
+
+/* ── Auto-generate contributions ─────────────────────────────── */
 
 async function autoGenContribs() {
   const month     = document.getElementById('con-month').value;
   const year      = document.getElementById('con-year').value;
-  const monthName = new Date(year, month-1).toLocaleString('en', { month:'long' });
+  const monthName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
+  const changedBy = localStorage.getItem(ADMIN_NAME_KEY) || 'Admin';
 
-  if (!allMembers.length) {
-    alert('No members found. Please refresh first.'); return;
-  }
+  if (!allMembers.length) { alert('No members found. Please refresh first.'); return; }
 
   const existing = new Set(allContribs.map(c => c.memberId));
   const toCreate = allMembers.filter(m => !existing.has(m.localId));
 
-  if (!toCreate.length) {
-    showToast('All members already have records for this month ✓'); return;
-  }
+  if (!toCreate.length) { showToast('All members already have records for this month ✓'); return; }
 
-  if (!confirm(`Create contribution records for ${toCreate.length} member(s)\nfor ${monthName} ${year}?\n\nExisting records will not be changed.`)) return;
+  if (!confirm(`Create ${toCreate.length} new Unpaid record(s) for ${monthName} ${year}?\n\nExisting records will not be changed.`)) return;
 
   for (const m of toCreate) {
-    apiWrite({ action: 'updateContribution', memberId: m.localId,
-               memberName: m.name, month, year, amount: 30, status: 'Unpaid' });
+    apiWrite({ action: 'updateContribution', memberId: m.localId, memberName: m.name,
+               month, year, amount: 30, status: 'Unpaid', notes: '', changedBy });
   }
-  // Wait for sheet writes to settle before re-reading.
   await new Promise(r => setTimeout(r, 1500));
-
-  await loadContribs();
-  showToast(`Created ${toCreate.length} new record(s) ✓`);
+  await Promise.all([loadContribs(), loadContribLog(), loadAllContribs()]);
+  showToast(`Created ${toCreate.length} record(s) ✓`);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -920,6 +1152,16 @@ function updateTopStats() {
    ════════════════════════════════════════════════════════════ */
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/** Format an ISO timestamp to a readable local date+time string. */
+function fmtTs(ts) {
+  if (!ts) return '–';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })
+           + ' ' + d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
+  } catch { return String(ts); }
 }
 
 let toastTimer;
