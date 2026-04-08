@@ -809,19 +809,27 @@
     <!-- ── Attendance Panel ── -->
     <div id="panel-att">
 
-      <!-- Calendar header: prev / month+year selectors / next -->
+      <!-- Calendar header: member dropdown / prev / title / month+year / next -->
       <div class="att-cal-header">
-        <button class="att-cal-nav" onclick="attCalNav(-1)" title="Previous month">
-          <i class="bi bi-chevron-left"></i>
-        </button>
-        <div class="att-cal-title" id="att-cal-title">Loading…</div>
-        <div class="att-cal-selectors">
-          <select class="att-cal-sel" id="att-sel-month" onchange="attCalGoto()"></select>
-          <select class="att-cal-sel" id="att-sel-year"  onchange="attCalGoto()"></select>
+        <!-- Member selector — "All Members" is default -->
+        <select class="att-cal-sel" id="att-sel-member" onchange="attMemberChange()"
+                style="min-width:145px;font-weight:600;">
+          <option value="">👥 All Members</option>
+        </select>
+
+        <div style="display:flex;align-items:center;gap:0.4rem;flex:1;justify-content:flex-end;">
+          <button class="att-cal-nav" onclick="attCalNav(-1)" title="Previous month">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <div class="att-cal-title" id="att-cal-title" style="min-width:130px;">Loading…</div>
+          <div class="att-cal-selectors">
+            <select class="att-cal-sel" id="att-sel-month" onchange="attCalGoto()"></select>
+            <select class="att-cal-sel" id="att-sel-year"  onchange="attCalGoto()"></select>
+          </div>
+          <button class="att-cal-nav" onclick="attCalNav(1)" title="Next month">
+            <i class="bi bi-chevron-right"></i>
+          </button>
         </div>
-        <button class="att-cal-nav" onclick="attCalNav(1)" title="Next month">
-          <i class="bi bi-chevron-right"></i>
-        </button>
       </div>
 
       <!-- Calendar grid -->
@@ -846,8 +854,8 @@
 
       <!-- Legend -->
       <div class="att-legend">
-        <span><span class="att-legend-dot" style="background:#27ae60;"></span>Has attendance</span>
-        <span><span class="att-legend-dot" style="background:#e0d5cc;border:1px solid #ccc;"></span>No record</span>
+        <span><span class="att-legend-dot" style="background:#27ae60;"></span><span id="att-leg-present">Has attendance</span></span>
+        <span><span class="att-legend-dot" style="background:#e0d5cc;border:1px solid #ccc;"></span><span id="att-leg-absent">No record</span></span>
         <span><span class="att-legend-dot" style="background:#c0392b;"></span>Today</span>
         <span style="margin-left:auto;font-size:0.73rem;" id="att-cal-total"></span>
       </div>
@@ -1084,7 +1092,7 @@
 /* ════════════════════════════════════════════════════════════
    🔧  CONFIGURATION  —  paste your Web App URL below
    ════════════════════════════════════════════════════════════ */
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
+const SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'; // ← Replace!
 
 /* ── Auth / identity keys ── */
 const AUTH_KEY        = 'pk_admin_hash';
@@ -1308,41 +1316,61 @@ function switchTab(id) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   Attendance — Calendar View
+   Attendance — Calendar View (dropdown + calendar)
    ════════════════════════════════════════════════════════════ */
 const ATT_MONTH_NAMES = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December'
 ];
-const ATT_MONTH_SHORT = [
-  'Jan','Feb','Mar','Apr','May','Jun',
-  'Jul','Aug','Sep','Oct','Nov','Dec'
-];
 
-let _attYear  = new Date().getFullYear();
-let _attMonth = new Date().getMonth();   // 0-based
-let _attDayMap = {};  // 'dd/MM/yyyy' → [name, name, …]
+let _attYear        = new Date().getFullYear();
+let _attMonth       = new Date().getMonth();  // 0-based
+let _attSelected    = null;                   // null = All Members, else localId string
+let _attDayMap      = {};                     // 'dd/MM/yyyy' → [name, …]   (all-members)
+let _memberAttDates = {};                     // localid → Set<'dd/MM/yyyy'> (individual)
 let _attSelectedDay = null;
 
+/* ── Init ──────────────────────────────────────────────────── */
 function initAttCalendar() {
   const mSel = document.getElementById('att-sel-month');
   const ySel = document.getElementById('att-sel-year');
-
-  // Month options
   ATT_MONTH_NAMES.forEach((m, i) => mSel.add(new Option(m, i)));
   mSel.value = _attMonth;
-
-  // Year options: 5 years back to 1 year ahead
   const now = new Date().getFullYear();
   for (let y = now + 1; y >= now - 5; y--) ySel.add(new Option(y, y));
   ySel.value = _attYear;
+
+  // ── Permanent click listener on stable parent — set ONCE, never removed.
+  //    Survives every innerHTML replacement inside #att-cal-weeks.
+  document.getElementById('panel-att').addEventListener('click', function(e) {
+    const cell = e.target.closest('.att-day-cell[data-date]');
+    if (cell) _showAttDay(cell.dataset.date);
+  });
 }
 
+/* ── Populate member dropdown (called after members load) ──── */
+function populateAttMemberDropdown() {
+  const sel     = document.getElementById('att-sel-member');
+  const current = sel.value;
+  while (sel.options.length > 1) sel.remove(1);  // keep "All Members" option
+  allMembers.forEach(m => sel.add(new Option(m.name, m.localId)));
+  // Restore previous selection if still valid
+  if (current && allMembers.some(m => m.localId === current)) {
+    sel.value    = current;
+    _attSelected = current;
+  } else {
+    sel.value    = '';
+    _attSelected = null;
+  }
+}
+
+/* ── Load logs ─────────────────────────────────────────────── */
 async function loadLogs() {
   try {
     const data = await apiRead({ action: 'getLogs', limit: 1500 });
     allLogs = data.logs || [];
     _buildAttDayMap();
+    _buildMemberAttDates();
     renderAttCalendar();
   } catch (e) {
     document.getElementById('att-cal-weeks').innerHTML =
@@ -1350,7 +1378,7 @@ async function loadLogs() {
   }
 }
 
-/* Build day map from allLogs — keyed by 'dd/MM/yyyy' */
+/* 'dd/MM/yyyy' → [name, …]  — all members */
 function _buildAttDayMap() {
   _attDayMap = {};
   allLogs.forEach(l => {
@@ -1360,6 +1388,17 @@ function _buildAttDayMap() {
   });
 }
 
+/* localid → Set<'dd/MM/yyyy'>  — per-member presence lookup */
+function _buildMemberAttDates() {
+  _memberAttDates = {};
+  allLogs.forEach(l => {
+    if (!l.localid || !l.date) return;
+    if (!_memberAttDates[l.localid]) _memberAttDates[l.localid] = new Set();
+    _memberAttDates[l.localid].add(l.date);
+  });
+}
+
+/* ── Navigation ────────────────────────────────────────────── */
 function attCalNav(delta) {
   _attMonth += delta;
   if (_attMonth < 0)  { _attMonth = 11; _attYear--; }
@@ -1377,92 +1416,109 @@ function attCalGoto() {
   renderAttCalendar();
 }
 
+function attMemberChange() {
+  _attSelected    = document.getElementById('att-sel-member').value || null;
+  _attSelectedDay = null;
+  closeAttDetail();
+  renderAttCalendar();
+}
+
+/* ── Render calendar ───────────────────────────────────────── */
 function renderAttCalendar() {
-  // Update header title
   document.getElementById('att-cal-title').textContent =
     `${ATT_MONTH_NAMES[_attMonth]} ${_attYear}`;
 
-  const today     = new Date();
-  const todayKey  = _fmtDateKey(today.getDate(), today.getMonth() + 1, today.getFullYear());
+  const today    = new Date();
+  const todayKey = _fmtDateKey(today.getDate(), today.getMonth() + 1, today.getFullYear());
 
-  // First day of this month (Mon-based: Mon=0 … Sun=6)
-  const firstDay  = new Date(_attYear, _attMonth, 1);
-  const daysInMo  = new Date(_attYear, _attMonth + 1, 0).getDate();
-  let   startDow  = firstDay.getDay();           // JS: 0=Sun … 6=Sat
-  startDow        = (startDow + 6) % 7;          // convert → Mon=0 … Sun=6
+  // Month grid geometry
+  const firstDay = new Date(_attYear, _attMonth, 1);
+  const daysInMo = new Date(_attYear, _attMonth + 1, 0).getDate();
+  let   startDow = (firstDay.getDay() + 6) % 7;  // Mon=0 … Sun=6
 
-  // Build flat cell array: null for blanks, number for real days
   const cells = [
     ...Array(startDow).fill(null),
     ...Array.from({ length: daysInMo }, (_, i) => i + 1),
   ];
   while (cells.length % 7) cells.push(null);
 
-  // Count total records this month for the footer
-  let monthTotal = 0;
-  for (let d = 1; d <= daysInMo; d++) {
-    const key = _fmtDateKey(d, _attMonth + 1, _attYear);
-    monthTotal += (_attDayMap[key] || []).length;
-  }
-  document.getElementById('att-cal-total').textContent =
-    monthTotal ? `${monthTotal} attendance record${monthTotal !== 1 ? 's' : ''} this month` : '';
+  // Mode-specific setup
+  const isIndividual  = !!_attSelected;
+  const memberDates   = isIndividual ? (_memberAttDates[_attSelected] || new Set()) : null;
+  const memberObj     = isIndividual ? allMembers.find(m => m.localId === _attSelected) : null;
 
-  // Build week rows HTML
+  // Footer summary
+  if (isIndividual) {
+    const presentCount = memberDates
+      ? [...memberDates].filter(d => {
+          const [dd, mm, yy] = d.split('/').map(Number);
+          return mm - 1 === _attMonth && yy === _attYear;
+        }).length
+      : 0;
+    document.getElementById('att-cal-total').textContent =
+      presentCount ? `${presentCount} session${presentCount !== 1 ? 's' : ''} attended this month` : 'No sessions this month';
+    document.getElementById('att-leg-present').textContent = 'Present';
+    document.getElementById('att-leg-absent').textContent  = 'Not recorded';
+  } else {
+    let monthTotal = 0;
+    for (let d = 1; d <= daysInMo; d++)
+      monthTotal += (_attDayMap[_fmtDateKey(d, _attMonth + 1, _attYear)] || []).length;
+    document.getElementById('att-cal-total').textContent =
+      monthTotal ? `${monthTotal} record${monthTotal !== 1 ? 's' : ''} this month` : '';
+    document.getElementById('att-leg-present').textContent = 'Has attendance';
+    document.getElementById('att-leg-absent').textContent  = 'No record';
+  }
+
+  // Build week rows
   const weeksHtml = [];
   for (let w = 0; w < cells.length / 7; w++) {
     const dayCells = cells.slice(w * 7, w * 7 + 7).map(dayNum => {
-      if (dayNum === null) {
-        return `<div class="att-day-cell att-other-month"></div>`;
+      if (dayNum === null) return `<div class="att-day-cell att-other-month"></div>`;
+
+      const key     = _fmtDateKey(dayNum, _attMonth + 1, _attYear);
+      const isToday = key === todayKey;
+      const isSel   = key === _attSelectedDay;
+      const numCls  = isToday ? 'att-day-num att-today-num' : 'att-day-num';
+      let inner     = `<div class="${numCls}">${dayNum}</div>`;
+      let hasAtt    = false;
+
+      if (isIndividual) {
+        // ── Individual mode: present / absent ──────────────────
+        hasAtt = memberDates.has(key);
+        if (hasAtt) {
+          inner += `<div class="att-count-pill"><i class="bi bi-check2"></i> Present</div>`;
+        }
+      } else {
+        // ── All Members mode: names in cells ───────────────────
+        const names = _attDayMap[key] || [];
+        hasAtt = names.length > 0;
+        if (hasAtt) {
+          inner += `<div class="att-count-pill">${names.length} present</div>`;
+          const unique  = [...new Set(names)];
+          const preview = unique.slice(0, 3).map(n => esc(n)).join(', ');
+          const more    = unique.length > 3 ? ` +${unique.length - 3}` : '';
+          inner += `<div class="att-day-names">${preview}${more}</div>`;
+        }
       }
-      const key      = _fmtDateKey(dayNum, _attMonth + 1, _attYear);
-      const names    = _attDayMap[key] || [];
-      const hasAtt   = names.length > 0;
-      const isToday  = key === todayKey;
-      const isSel    = key === _attSelectedDay;
 
-      const numCls = isToday ? 'att-day-num att-today-num' : 'att-day-num';
-      let inner = `<div class="${numCls}">${dayNum}</div>`;
-
-      if (hasAtt) {
-        inner += `<div class="att-count-pill">${names.length} present</div>`;
-        const unique  = [...new Set(names)];
-        const preview = unique.slice(0, 3).map(n => esc(n)).join(', ');
-        const more    = unique.length > 3 ? ` +${unique.length - 3}` : '';
-        inner += `<div class="att-day-names">${preview}${more}</div>`;
-      }
-
-      const cls = [
-        'att-day-cell',
-        hasAtt ? 'att-has-data' : '',
-        isSel  ? 'att-selected' : '',
-      ].filter(Boolean).join(' ');
-
-      // Use data-date attribute + event delegation (no inline onclick — avoids
-      // child-element click bubbling issues)
+      const cls     = ['att-day-cell', hasAtt ? 'att-has-data' : '', isSel ? 'att-selected' : '']
+                        .filter(Boolean).join(' ');
       const datAttr = hasAtt ? `data-date="${key}"` : '';
 
       return `<div class="${cls}" ${datAttr}>${inner}</div>`;
     }).join('');
-
     weeksHtml.push(`<div class="att-week-row">${dayCells}</div>`);
   }
 
-  const weeksEl = document.getElementById('att-cal-weeks');
-  weeksEl.innerHTML = weeksHtml.join('');
+  document.getElementById('att-cal-weeks').innerHTML = weeksHtml.join('');
+  // No listener management here — permanent listener on #panel-att handles all clicks
 
-  // Single delegated listener — replaced each render to keep it fresh
-  weeksEl._calClick && weeksEl.removeEventListener('click', weeksEl._calClick);
-  weeksEl._calClick = function(e) {
-    const cell = e.target.closest('[data-date]');
-    if (cell) _showAttDay(cell.dataset.date);
-  };
-  weeksEl.addEventListener('click', weeksEl._calClick);
-
-  // Re-show detail for previously selected day (after month nav)
-  if (_attSelectedDay && _attDayMap[_attSelectedDay]) {
-    _showAttDay(_attSelectedDay, /* skipScroll */ true);
-  } else {
-    closeAttDetail();
+  // Restore detail panel if day still visible
+  if (_attSelectedDay) {
+    const still = isIndividual
+      ? memberDates.has(_attSelectedDay)
+      : !!(_attDayMap[_attSelectedDay]?.length);
+    still ? _showAttDay(_attSelectedDay, true) : closeAttDetail();
   }
 }
 
@@ -1470,41 +1526,60 @@ function _fmtDateKey(d, m, y) {
   return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
 }
 
+/* ── Day detail panel ──────────────────────────────────────── */
 function _showAttDay(dateKey, skipScroll) {
   _attSelectedDay = dateKey;
 
-  // Highlight selected cell
+  // Highlight cell
   document.querySelectorAll('.att-day-cell').forEach(el => el.classList.remove('att-selected'));
-  const cell = document.querySelector(`[data-date="${dateKey}"]`);
+  const cell = document.querySelector(`.att-day-cell[data-date="${dateKey}"]`);
   if (cell) cell.classList.add('att-selected');
 
-  const names = _attDayMap[dateKey] || [];
   const [d, m, y] = dateKey.split('/').map(Number);
-  const dt    = new Date(y, m - 1, d);
-  const label = dt.toLocaleDateString('en-AU', {
+  const label = new Date(y, m - 1, d).toLocaleDateString('en-AU', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
-
   document.getElementById('att-detail-date').textContent = label;
 
-  // Count per unique name
-  const countMap = {};
-  names.forEach(n => { countMap[n] = (countMap[n] || 0) + 1; });
-  const rowsHtml = Object.entries(countMap)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([n, cnt]) => `
-      <div class="att-detail-row">
+  let bodyHtml = '';
+
+  if (_attSelected) {
+    // ── Individual mode: show session times for this member ───
+    const logs = allLogs.filter(l => l.localid === _attSelected && l.date === dateKey);
+    const memberName = allMembers.find(m => m.localId === _attSelected)?.name || 'Member';
+    const timeRows = logs.map(l => {
+      const ts      = l.timestamp ? new Date(l.timestamp) : null;
+      const timeStr = ts
+        ? ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
+        : '–';
+      return `<div class="att-detail-row">
+        <i class="bi bi-clock" style="color:var(--blue);font-size:1rem;"></i>
+        <span>Checked in at <strong>${timeStr}</strong></span>
+      </div>`;
+    }).join('');
+    bodyHtml = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
+      ${memberName} — ${logs.length} record${logs.length !== 1 ? 's' : ''}
+    </div>${timeRows}`;
+
+  } else {
+    // ── All Members mode: list everyone who attended ──────────
+    const names = _attDayMap[dateKey] || [];
+    const countMap = {};
+    names.forEach(n => { countMap[n] = (countMap[n] || 0) + 1; });
+    const rows = Object.entries(countMap)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([n, cnt]) => `<div class="att-detail-row">
         <i class="bi bi-person-check" style="color:var(--green);font-size:1rem;"></i>
         <strong style="flex:1;">${esc(n)}</strong>
         ${cnt > 1 ? `<span class="badge-neutral">${cnt}× recorded</span>` : ''}
       </div>`).join('');
+    const uniq = Object.keys(countMap).length;
+    bodyHtml = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
+      ${names.length} record${names.length !== 1 ? 's' : ''} · ${uniq} unique member${uniq !== 1 ? 's' : ''}
+    </div>${rows}`;
+  }
 
-  const uniq = Object.keys(countMap).length;
-  document.getElementById('att-detail-body').innerHTML =
-    `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
-       ${names.length} record${names.length !== 1 ? 's' : ''} · ${uniq} unique member${uniq !== 1 ? 's' : ''}
-     </div>${rowsHtml}`;
-
+  document.getElementById('att-detail-body').innerHTML = bodyHtml;
   const panel = document.getElementById('att-detail-panel');
   panel.style.display = 'block';
   if (!skipScroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1586,6 +1661,9 @@ function renderMembers() {
       </td>
     </tr>`;
   }).join('');
+
+  // Keep attendance member dropdown in sync whenever member list changes
+  populateAttMemberDropdown();
 }
 
 /* ── Navigate from Members → Contributions ──────────────────── */
