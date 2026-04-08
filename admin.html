@@ -362,6 +362,11 @@
         <i class="bi bi-shield-lock me-2"></i>Login
       </button>
       <div class="login-error" id="login-error">Incorrect password. Please try again.</div>
+      <div style="margin-top:0.9rem;">
+        <a onclick="doForgotPw()" style="color:#6a4030;font-size:0.8rem;cursor:pointer;text-decoration:underline;">
+          Forgot password?
+        </a>
+      </div>
     </div>
 
     <!-- First-time setup (shown when no hash stored) -->
@@ -467,12 +472,10 @@
                 <th>Date</th>
                 <th>Time</th>
                 <th>Name</th>
-                <th>Instrument</th>
-                <th>Location</th>
               </tr>
             </thead>
             <tbody id="att-body">
-              <tr><td colspan="5" class="text-center py-4 text-muted">
+              <tr><td colspan="3" class="text-center py-4 text-muted">
                 <span class="pk-spinner"></span>&nbsp; Loading…
               </td></tr>
             </tbody>
@@ -483,6 +486,11 @@
 
     <!-- ── Members Panel ── -->
     <div id="panel-mem" style="display:none">
+      <div class="d-flex justify-content-end mb-2">
+        <button class="pk-refresh-btn" onclick="openAddMemberModal()" style="background:var(--green);">
+          <i class="bi bi-person-plus"></i> Add Member
+        </button>
+      </div>
       <div class="pk-table-wrap">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
@@ -490,7 +498,6 @@
               <tr>
                 <th>#</th>
                 <th>Name</th>
-                <th>Instrument</th>
                 <th>Email</th>
                 <th>Joined</th>
                 <th>Sessions</th>
@@ -499,7 +506,7 @@
               </tr>
             </thead>
             <tbody id="mem-body">
-              <tr><td colspan="8" class="text-center py-4 text-muted">
+              <tr><td colspan="7" class="text-center py-4 text-muted">
                 <span class="pk-spinner"></span>&nbsp; Loading…
               </td></tr>
             </tbody>
@@ -511,15 +518,11 @@
     <!-- ── Contributions Panel ── -->
     <div id="panel-con" style="display:none">
       <div class="filter-bar">
-        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">View month:</label>
+        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">Month:</label>
         <select class="form-select form-select-sm" id="con-month" style="max-width:130px;" onchange="loadContribs()"></select>
         <select class="form-select form-select-sm" id="con-year"  style="max-width:95px;"  onchange="loadContribs()"></select>
-        <button class="btn btn-sm" style="background:var(--green);color:#fff;border-radius:8px;"
-                onclick="autoGenContribs()">
-          <i class="bi bi-magic me-1"></i>Auto-Generate
-        </button>
         <span style="font-size:0.78rem;color:var(--muted);" class="d-none d-md-inline">
-          <i class="bi bi-info-circle me-1"></i>Click card button to toggle paid / unpaid
+          <i class="bi bi-info-circle me-1"></i>Click a member card to record or edit their payment
         </span>
       </div>
 
@@ -535,6 +538,38 @@
 
 <!-- Toast -->
 <div class="pk-toast" id="toast"></div>
+
+<!-- ══ ADD MEMBER MODAL ═══════════════════════════════════════ -->
+<div class="modal fade ck-modal" id="addMemberModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px;">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>Add Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-name">NAME <span style="color:#c0392b">*</span></label>
+          <input type="text" class="form-control" id="am-name" placeholder="e.g. Senthil Kumar"
+                 style="border-radius:10px;" autocomplete="off">
+          <div class="invalid-feedback">Please enter a name.</div>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-email">EMAIL <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+          <input type="email" class="form-control" id="am-email" placeholder="email@example.com"
+                 style="border-radius:10px;" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer px-4 pb-4 pt-3">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Cancel</button>
+        <button class="btn btn-success fw-bold" id="am-submit" onclick="submitAddMember()"
+                style="border-radius:10px;min-width:120px;">
+          <i class="bi bi-check2 me-1"></i>Add Member
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ══ CONTRIBUTION CHANGE MODAL ══════════════════════════════ -->
 <div class="modal fade ck-modal" id="contribModal" tabindex="-1">
@@ -756,6 +791,21 @@ async function doSetup() {
   enterAdmin();
 }
 
+function doForgotPw() {
+  if (!confirm('This will clear the stored password from this device, allowing anyone with access to set a new admin password.\n\nContinue to reset?')) return;
+  localStorage.removeItem(AUTH_KEY);
+  // Show first-time setup
+  document.getElementById('login-error').style.display  = 'none';
+  document.getElementById('login-form').style.display   = 'none';
+  document.getElementById('setup-section').style.display = 'block';
+  document.getElementById('login-sub').textContent = 'Reset password — set a new one below';
+  // Pre-fill name/email in setup if available
+  const n = localStorage.getItem(ADMIN_NAME_KEY)  || '';
+  const e = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
+  if (n) document.getElementById('setup-name').value  = n;
+  if (e) document.getElementById('setup-email').value = e;
+}
+
 function doLogout() {
   document.getElementById('admin-panel').style.display  = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -842,7 +892,7 @@ function renderLogs(logs) {
   const body = document.getElementById('att-body');
 
   if (!logs.length) {
-    body.innerHTML = `<tr><td colspan="5">
+    body.innerHTML = `<tr><td colspan="3">
       <div class="empty-state"><span class="empty-icon">📅</span>No attendance records yet.</div>
     </td></tr>`;
     return;
@@ -855,8 +905,6 @@ function renderLogs(logs) {
       <td>${esc(log.date || '–')}</td>
       <td style="color:var(--muted);">${timeStr}</td>
       <td><strong>${esc(log.name || '–')}</strong></td>
-      <td><span class="badge-neutral">${esc(log.instrument || '–')}</span></td>
-      <td><span style="font-size:0.8rem;color:var(--muted);">${esc(log.location || '–')}</span></td>
     </tr>`;
   }).join('');
 }
@@ -898,8 +946,8 @@ async function loadMembers() {
 function renderMembers() {
   const body = document.getElementById('mem-body');
   if (!allMembers.length) {
-    body.innerHTML = `<tr><td colspan="6">
-      <div class="empty-state"><span class="empty-icon">👥</span>No members yet.</div>
+    body.innerHTML = `<tr><td colspan="7">
+      <div class="empty-state"><span class="empty-icon">👥</span>No members yet. Use "Add Member" to add someone.</div>
     </td></tr>`;
     return;
   }
@@ -918,7 +966,6 @@ function renderMembers() {
     return `<tr>
       <td style="color:var(--muted);">${i+1}</td>
       <td><strong>${esc(m.name)}</strong></td>
-      <td><span class="badge-neutral">${esc(m.instrument || '–')}</span></td>
       <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
       <td style="font-size:0.83rem;color:var(--muted);">${esc(m.joinDate || '–')}</td>
       <td><span class="badge-neutral">${cnt} session${cnt !== 1 ? 's' : ''}</span></td>
@@ -928,6 +975,53 @@ function renderMembers() {
       <td style="font-weight:600;color:var(--green);">$${totalPaid}</td>
     </tr>`;
   }).join('');
+}
+
+/* ── Add Member ─────────────────────────────────────────────── */
+let addMemberModalInst = null;
+
+function openAddMemberModal() {
+  if (!addMemberModalInst)
+    addMemberModalInst = new bootstrap.Modal(document.getElementById('addMemberModal'));
+  document.getElementById('am-name').value  = '';
+  document.getElementById('am-email').value = '';
+  document.getElementById('am-name').classList.remove('is-invalid');
+  addMemberModalInst.show();
+  setTimeout(() => document.getElementById('am-name').focus(), 350);
+}
+
+async function submitAddMember() {
+  const name  = document.getElementById('am-name').value.trim();
+  const email = document.getElementById('am-email').value.trim();
+
+  if (!name) {
+    document.getElementById('am-name').classList.add('is-invalid');
+    return;
+  }
+  document.getElementById('am-name').classList.remove('is-invalid');
+
+  const btn = document.getElementById('am-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="pk-spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.2);"></span> Adding…';
+
+  const localId = generateUUID();
+  apiWrite({ action: 'registerMember', localId, name, instrument: '', email: email || '' });
+
+  await new Promise(r => setTimeout(r, 1300));
+  addMemberModalInst.hide();
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Add Member';
+
+  await Promise.all([loadMembers(), loadAllContribs()]);
+  updateTopStats();
+  showToast(`${name} added ✓`);
+}
+
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -976,51 +1070,77 @@ function renderContribs() {
   const monthName = new Date(year, month-1).toLocaleString('en', { month:'long' });
 
   if (!allMembers.length) {
-    container.innerHTML = '<div class="empty-state"><span class="empty-icon">👥</span>No members loaded yet.</div>';
+    container.innerHTML = `<div class="empty-state">
+      <span class="empty-icon">👥</span>
+      No members yet. Go to the Members tab and click "Add Member".
+    </div>`;
     return;
   }
 
-  // Build lookup map
+  // Build lookup map by memberId
   const cMap = {};
-  allContribs.forEach(c => { cMap[c.memberId] = c; });
+  allContribs.forEach(c => { cMap[String(c.memberId)] = c; });
 
-  let paidCount = 0;
+  let paidCount = 0, noRecordCount = 0;
   const cards = allMembers.map(m => {
-    const c      = cMap[m.localId];
-    const isPaid = c && c.status === 'Paid';
-    if (isPaid) paidCount++;
+    const c         = cMap[String(m.localId)];
+    const hasRecord = !!c;
+    const isPaid    = hasRecord && c.status === 'Paid';
+    if (isPaid)      paidCount++;
+    if (!hasRecord)  noRecordCount++;
 
-    const notesHtml = (c && c.notes)
+    // Status badge
+    const badge = hasRecord
+      ? (isPaid
+          ? `<span class="badge-paid">✓ Paid</span>`
+          : `<span class="badge-unpaid">✗ Unpaid</span>`)
+      : `<span class="badge-neutral" style="opacity:0.7;">No record</span>`;
+
+    // Amount line
+    const amountLine = hasRecord
+      ? `<span style="font-size:0.78rem;color:var(--muted);">$${c.amount || 30}</span>` : '';
+
+    // Notes
+    const notesHtml = (hasRecord && c.notes)
       ? `<div class="contrib-notes"><i class="bi bi-chat-left-text me-1"></i>${esc(c.notes)}</div>` : '';
-    const metaHtml  = (c && c.lastUpdated)
+
+    // Meta (last updated by)
+    const metaHtml = (hasRecord && c.lastUpdated)
       ? `<div class="contrib-meta">
            <i class="bi bi-clock me-1"></i>${fmtTs(c.lastUpdated)}
            ${c.changedBy ? `&nbsp;·&nbsp;<i class="bi bi-person me-1"></i>${esc(c.changedBy)}` : ''}
          </div>` : '';
 
+    // Primary action button
+    const actionBtn = hasRecord
+      ? `<button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
+                 onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${month},${year})">
+           <i class="bi bi-pencil me-1"></i>Edit Payment
+         </button>`
+      : `<button class="contrib-toggle mark-paid"
+                 onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${month},${year})">
+           <i class="bi bi-plus-circle me-1"></i>Record Payment
+         </button>`;
+
+    // History button only if record exists
+    const historyBtn = hasRecord
+      ? `<button class="contrib-history-btn"
+                 onclick="showHistory('${esc(m.localId)}','${esc(m.name)}')">
+           <i class="bi bi-clock-history"></i> History
+         </button>` : '';
+
     return `
-      <div class="contrib-card ${isPaid ? 'paid' : 'unpaid'}">
-        <div class="d-flex justify-content-between align-items-start">
-          <div>
-            <div class="contrib-name">${esc(m.name)}</div>
-            <div class="contrib-role">${esc(m.instrument || 'Member')}</div>
-          </div>
-          <span class="${isPaid ? 'badge-paid' : 'badge-unpaid'}">
-            ${isPaid ? '✓ Paid' : '✗ Unpaid'}
-          </span>
+      <div class="contrib-card ${hasRecord ? (isPaid ? 'paid' : 'unpaid') : ''}">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <div class="contrib-name">${esc(m.name)}</div>
+          ${badge}
         </div>
         ${notesHtml}${metaHtml}
         <div class="d-flex justify-content-between align-items-center mt-2">
-          <span style="font-size:0.78rem;color:var(--muted);">${monthName} ${year}${c && c.amount ? ` · $${c.amount}` : ' · $30'}</span>
-          <div class="d-flex gap-1">
-            <button class="contrib-toggle ${isPaid ? 'mark-unpaid' : 'mark-paid'}"
-                    onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${isPaid},${month},${year})">
-              ${isPaid ? '✗ Unpaid' : '✓ Paid'}
-            </button>
-            <button class="contrib-history-btn"
-                    onclick="showHistory('${esc(m.localId)}','${esc(m.name)}')">
-              <i class="bi bi-clock-history"></i> History
-            </button>
+          ${amountLine}
+          <div class="d-flex gap-1 ms-auto">
+            ${actionBtn}
+            ${historyBtn}
           </div>
         </div>
       </div>`;
@@ -1030,21 +1150,34 @@ function renderContribs() {
 
   // Update contribution stats
   document.getElementById('s-paid').textContent   = paidCount;
-  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount;
+  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount - noRecordCount;
 }
 
 /* ── Contribution change modal ─────────────────────────────── */
 
-function openContribModal(memberId, memberName, currentlyPaid, month, year) {
-  cmState = { memberId, memberName, month, year, status: currentlyPaid ? 'Unpaid' : 'Paid' };
+function openContribModal(memberId, memberName, month, year) {
+  // Look up existing record for this member/month/year
+  const existing  = allContribs.find(c => String(c.memberId) === String(memberId));
+  const hasRecord = !!existing;
+  const initStatus = hasRecord ? (existing.status || 'Unpaid') : 'Paid';
+
+  cmState = { memberId, memberName, month, year, status: initStatus };
+
   const mName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
-  document.getElementById('cm-title').textContent = `${memberName} — ${mName} ${year}`;
-  document.getElementById('cm-notes').value       = '';
-  document.getElementById('cm-amount').value      = '30';
+  document.getElementById('cm-title').textContent =
+    hasRecord ? `Edit Payment — ${memberName}` : `Record Payment — ${memberName}`;
+
+  // Pre-fill existing values when editing, fresh defaults when recording new
+  document.getElementById('cm-notes').value  = hasRecord ? (existing.notes  || '') : '';
+  document.getElementById('cm-amount').value = hasRecord ? (existing.amount || 30)  : '30';
 
   const name  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
   const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
   document.getElementById('cm-by').value = (name && email) ? `${name} (${email})` : (name || '');
+
+  // Update submit button label
+  const submitBtn = document.getElementById('cm-submit');
+  submitBtn.style.display = '';
 
   refreshCMButtons();
   contribModalInst.show();
@@ -1084,7 +1217,7 @@ async function submitContribChange() {
   await Promise.all([loadContribs(), loadContribLog(), loadAllContribs()]);
 
   btn.disabled = false;
-  showToast(`${memberName} marked as ${status} ✓`);
+  showToast(`${memberName} — payment saved as ${status} ✓`);
 }
 
 /* ── History modal ─────────────────────────────────────────── */
@@ -1121,32 +1254,6 @@ function showHistory(memberId, memberName) {
   }
 
   historyModalInst.show();
-}
-
-/* ── Auto-generate contributions ─────────────────────────────── */
-
-async function autoGenContribs() {
-  const month     = document.getElementById('con-month').value;
-  const year      = document.getElementById('con-year').value;
-  const monthName = new Date(year, month - 1).toLocaleString('en', { month: 'long' });
-  const changedBy = localStorage.getItem(ADMIN_NAME_KEY) || 'Admin';
-
-  if (!allMembers.length) { alert('No members found. Please refresh first.'); return; }
-
-  const existing = new Set(allContribs.map(c => c.memberId));
-  const toCreate = allMembers.filter(m => !existing.has(m.localId));
-
-  if (!toCreate.length) { showToast('All members already have records for this month ✓'); return; }
-
-  if (!confirm(`Create ${toCreate.length} new Unpaid record(s) for ${monthName} ${year}?\n\nExisting records will not be changed.`)) return;
-
-  for (const m of toCreate) {
-    apiWrite({ action: 'updateContribution', memberId: m.localId, memberName: m.name,
-               month, year, amount: 30, status: 'Unpaid', notes: '', changedBy });
-  }
-  await new Promise(r => setTimeout(r, 1500));
-  await Promise.all([loadContribs(), loadContribLog(), loadAllContribs()]);
-  showToast(`Created ${toCreate.length} record(s) ✓`);
 }
 
 /* ════════════════════════════════════════════════════════════
