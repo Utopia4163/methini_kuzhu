@@ -1420,12 +1420,11 @@ function renderAttCalendar() {
       const isToday  = key === todayKey;
       const isSel    = key === _attSelectedDay;
 
-      const numCls   = isToday ? 'att-day-num att-today-num' : 'att-day-num';
+      const numCls = isToday ? 'att-day-num att-today-num' : 'att-day-num';
       let inner = `<div class="${numCls}">${dayNum}</div>`;
 
       if (hasAtt) {
         inner += `<div class="att-count-pill">${names.length} present</div>`;
-        // De-dupe and preview first 3 names
         const unique  = [...new Set(names)];
         const preview = unique.slice(0, 3).map(n => esc(n)).join(', ');
         const more    = unique.length > 3 ? ` +${unique.length - 3}` : '';
@@ -1438,20 +1437,30 @@ function renderAttCalendar() {
         isSel  ? 'att-selected' : '',
       ].filter(Boolean).join(' ');
 
-      const click = hasAtt
-        ? `onclick="showAttDay('${key}')"` : '';
+      // Use data-date attribute + event delegation (no inline onclick — avoids
+      // child-element click bubbling issues)
+      const datAttr = hasAtt ? `data-date="${key}"` : '';
 
-      return `<div class="${cls}" ${click}>${inner}</div>`;
+      return `<div class="${cls}" ${datAttr}>${inner}</div>`;
     }).join('');
 
     weeksHtml.push(`<div class="att-week-row">${dayCells}</div>`);
   }
 
-  document.getElementById('att-cal-weeks').innerHTML = weeksHtml.join('');
+  const weeksEl = document.getElementById('att-cal-weeks');
+  weeksEl.innerHTML = weeksHtml.join('');
 
-  // If a day was previously selected, re-render its detail
+  // Single delegated listener — replaced each render to keep it fresh
+  weeksEl._calClick && weeksEl.removeEventListener('click', weeksEl._calClick);
+  weeksEl._calClick = function(e) {
+    const cell = e.target.closest('[data-date]');
+    if (cell) _showAttDay(cell.dataset.date);
+  };
+  weeksEl.addEventListener('click', weeksEl._calClick);
+
+  // Re-show detail for previously selected day (after month nav)
   if (_attSelectedDay && _attDayMap[_attSelectedDay]) {
-    showAttDay(_attSelectedDay);
+    _showAttDay(_attSelectedDay, /* skipScroll */ true);
   } else {
     closeAttDetail();
   }
@@ -1461,29 +1470,27 @@ function _fmtDateKey(d, m, y) {
   return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
 }
 
-function showAttDay(dateKey) {
+function _showAttDay(dateKey, skipScroll) {
   _attSelectedDay = dateKey;
-  // Re-apply selected class without full re-render
-  document.querySelectorAll('.att-day-cell').forEach(el => el.classList.remove('att-selected'));
-  // Find the cell by matching onclick
-  document.querySelectorAll('.att-has-data').forEach(el => {
-    if (el.getAttribute('onclick') === `showAttDay('${dateKey}')`)
-      el.classList.add('att-selected');
-  });
 
-  const names  = _attDayMap[dateKey] || [];
+  // Highlight selected cell
+  document.querySelectorAll('.att-day-cell').forEach(el => el.classList.remove('att-selected'));
+  const cell = document.querySelector(`[data-date="${dateKey}"]`);
+  if (cell) cell.classList.add('att-selected');
+
+  const names = _attDayMap[dateKey] || [];
   const [d, m, y] = dateKey.split('/').map(Number);
-  const dt     = new Date(y, m - 1, d);
-  const label  = dt.toLocaleDateString('en-AU', {
+  const dt    = new Date(y, m - 1, d);
+  const label = dt.toLocaleDateString('en-AU', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 
   document.getElementById('att-detail-date').textContent = label;
 
-  // Unique names with per-person record count
+  // Count per unique name
   const countMap = {};
   names.forEach(n => { countMap[n] = (countMap[n] || 0) + 1; });
-  const rows = Object.entries(countMap)
+  const rowsHtml = Object.entries(countMap)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([n, cnt]) => `
       <div class="att-detail-row">
@@ -1492,13 +1499,15 @@ function showAttDay(dateKey) {
         ${cnt > 1 ? `<span class="badge-neutral">${cnt}× recorded</span>` : ''}
       </div>`).join('');
 
+  const uniq = Object.keys(countMap).length;
   document.getElementById('att-detail-body').innerHTML =
     `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
-       ${names.length} record${names.length !== 1 ? 's' : ''} · ${Object.keys(countMap).length} unique member${Object.keys(countMap).length !== 1 ? 's' : ''}
-     </div>${rows}`;
+       ${names.length} record${names.length !== 1 ? 's' : ''} · ${uniq} unique member${uniq !== 1 ? 's' : ''}
+     </div>${rowsHtml}`;
 
-  document.getElementById('att-detail-panel').style.display = 'block';
-  document.getElementById('att-detail-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const panel = document.getElementById('att-detail-panel');
+  panel.style.display = 'block';
+  if (!skipScroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeAttDetail() {
