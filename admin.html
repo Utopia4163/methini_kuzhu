@@ -502,10 +502,54 @@
 /* ════════════════════════════════════════════════════════════
    🔧  CONFIGURATION  —  paste your Web App URL below
    ════════════════════════════════════════════════════════════ */
-const SCRIPT_URL = 'https://api.allorigins.win/raw?url=https://script.googleusercontent.com/macros/echo?user_content_key=AWDtjMW47pagaSJN743sTaVna4qZuqc2dZWVsrxypftQ346qdrMRwlOn1XruDT2AWqNMhqQsWgvP5XXd5ATv518d0QrCRcflc6b_9F7Jvdm_OGpnu7t0WQ3Mk2JXbixmH4iBV1FcGGjbQNv6IwZy31fcGB0VoFgD2X50FT1I7dKKm11jcEOKNajRfRZ2QnPbMSfWFNOKLNgfci2wmrDqeWKv16xrve2EtGBZjZi8TME4asvy8pyfY9MrQkDvI-5DFvfN7PJvso2i380kZ6sTTypnFw1BCsWQe3tqUsn5nTzR&lib=M5XMLVYIagiYa0L9f3CzM0j4lRjpr1GOY'; // ← Replace!
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
 
 /* ── Auth key ── */
 const AUTH_KEY = 'pk_admin_hash';
+
+/* ════════════════════════════════════════════════════════════
+   API helpers — CORS workaround for Apps Script
+   ─────────────────────────────────────────────────────────
+   Apps Script redirects via script.googleusercontent.com,
+   stripping CORS headers. Solution:
+     • Reads  → JSONP  (no CORS restriction on <script> tags)
+     • Writes → no-cors fetch (fire-and-forget; we re-read after)
+   ════════════════════════════════════════════════════════════ */
+
+function apiRead(params, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    const cb  = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    const url = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
+    const el  = document.createElement('script');
+    let timer;
+
+    window[cb] = (data) => {
+      clearTimeout(timer);
+      el.remove();
+      delete window[cb];
+      resolve(data);
+    };
+    el.onerror = () => {
+      clearTimeout(timer);
+      el.remove();
+      delete window[cb];
+      reject(new Error('Network error — could not reach Apps Script.'));
+    };
+    timer = setTimeout(() => {
+      el.remove();
+      delete window[cb];
+      reject(new Error('Request timed out. Check your internet connection.'));
+    }, timeoutMs);
+
+    el.src = url;
+    document.head.appendChild(el);
+  });
+}
+
+function apiWrite(params) {
+  const url = `${SCRIPT_URL}?${new URLSearchParams(params)}`;
+  fetch(url, { mode: 'no-cors' }).catch(() => {});
+}
 
 /* ── Runtime data ── */
 let allLogs     = [];
@@ -625,8 +669,7 @@ function switchTab(id) {
    ════════════════════════════════════════════════════════════ */
 async function loadLogs() {
   try {
-    const res  = await fetch(`${SCRIPT_URL}?action=getLogs&limit=600`);
-    const data = await res.json();
+    const data = await apiRead({ action: 'getLogs', limit: 600 });
     allLogs = data.logs || [];
     renderLogs(allLogs);
   } catch (e) {
@@ -684,8 +727,7 @@ function clearAttFilter() {
    ════════════════════════════════════════════════════════════ */
 async function loadMembers() {
   try {
-    const res  = await fetch(`${SCRIPT_URL}?action=getMembers`);
-    const data = await res.json();
+    const data = await apiRead({ action: 'getMembers' });
     allMembers = data.members || [];
     renderMembers();
   } catch (e) {
@@ -750,8 +792,7 @@ async function loadContribs() {
     '<div class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>';
 
   try {
-    const res   = await fetch(`${SCRIPT_URL}?action=getContributions&month=${month}&year=${year}`);
-    const data  = await res.json();
+    const data  = await apiRead({ action: 'getContributions', month, year });
     allContribs = data.contributions || [];
     renderContribs();
   } catch (e) {
@@ -815,23 +856,12 @@ async function toggleContrib(memberId, memberName, currentlyPaid) {
   const newStatus = currentlyPaid ? 'Unpaid' : 'Paid';
 
   try {
-    const params = new URLSearchParams({
-      action:     'updateContribution',
-      memberId,
-      memberName,
-      month,
-      year,
-      amount:     30,
-      status:     newStatus,
-    });
-    const res  = await fetch(`${SCRIPT_URL}?${params}`);
-    const data = await res.json();
-    if (data.success) {
-      await loadContribs();
-      showToast(`${memberName} marked as ${newStatus}`);
-    } else {
-      throw new Error(data.error || 'Update failed');
-    }
+    // Write via no-cors (fire-and-forget), then re-read to confirm.
+    apiWrite({ action: 'updateContribution', memberId, memberName, month, year, amount: 30, status: newStatus });
+    // Brief pause to allow the sheet write to complete before re-reading.
+    await new Promise(r => setTimeout(r, 1200));
+    await loadContribs();
+    showToast(`${memberName} marked as ${newStatus}`);
   } catch (e) {
     alert('Error: ' + e.message);
   }
@@ -856,16 +886,11 @@ async function autoGenContribs() {
   if (!confirm(`Create contribution records for ${toCreate.length} member(s)\nfor ${monthName} ${year}?\n\nExisting records will not be changed.`)) return;
 
   for (const m of toCreate) {
-    const params = new URLSearchParams({
-      action:     'updateContribution',
-      memberId:   m.localId,
-      memberName: m.name,
-      month, year,
-      amount: 30,
-      status: 'Unpaid',
-    });
-    await fetch(`${SCRIPT_URL}?${params}`);
+    apiWrite({ action: 'updateContribution', memberId: m.localId,
+               memberName: m.name, month, year, amount: 30, status: 'Unpaid' });
   }
+  // Wait for sheet writes to settle before re-reading.
+  await new Promise(r => setTimeout(r, 1500));
 
   await loadContribs();
   showToast(`Created ${toCreate.length} new record(s) ✓`);
