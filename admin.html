@@ -1402,13 +1402,58 @@ async function submitContribChange() {
 
 function showHistory(memberId, memberName) {
   document.getElementById('hm-title').textContent = `Audit Trail — ${memberName}`;
-  const entries = allContribLog.filter(e => String(e.memberId) === String(memberId));
 
-  if (!entries.length) {
-    document.getElementById('hm-body').innerHTML =
-      '<div class="text-center text-muted py-4">No history recorded yet for this member.</div>';
-  } else {
-    document.getElementById('hm-body').innerHTML = `
+  /* ── Section 1: current state from Contributions sheet (allContribsAll) ── */
+  const currentRecords = allContribsAll
+    .filter(c => String(c.memberId) === String(memberId) && parseInt(c.month) > 0)
+    .sort((a, b) => {
+      if (parseInt(a.year) !== parseInt(b.year)) return parseInt(b.year) - parseInt(a.year);
+      return parseInt(b.month) - parseInt(a.month);
+    });
+  const currentOB = allContribsAll.find(c =>
+    String(c.memberId) === String(memberId) && parseInt(c.month) === 0
+  );
+
+  let section1Html = '';
+  if (currentRecords.length || currentOB) {
+    const allCurrent = [...(currentOB ? [currentOB] : []), ...currentRecords];
+    section1Html = `
+      <h6 class="fw-semibold mb-2" style="color:var(--accent);">Current Payment Records</h6>
+      <div class="table-responsive mb-3">
+        <table class="table table-sm history-table mb-0">
+          <thead><tr>
+            <th>Month</th><th>Status</th><th>Amount</th><th>Notes</th><th>Last Updated</th><th>By</th>
+          </tr></thead>
+          <tbody>
+            ${allCurrent.map(c => {
+              const isOBRec = parseInt(c.month) === 0;
+              const mLabel = isOBRec
+                ? '<span style="color:#1a4a8a;font-weight:600;">Opening Balance</span>'
+                : new Date(parseInt(c.year), parseInt(c.month) - 1)
+                    .toLocaleString('en', { month: 'short' }) + ' ' + c.year;
+              const notesHtml = c.notes
+                ? `<span style="color:#333;">${esc(c.notes)}</span>`
+                : '<span class="text-muted">—</span>';
+              return `<tr>
+                <td>${mLabel}</td>
+                <td><span class="${c.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(c.status)}</span></td>
+                <td>$${c.amount || 0}</td>
+                <td>${notesHtml}</td>
+                <td style="white-space:nowrap;">${fmtTs(c.lastUpdated)}</td>
+                <td>${esc(c.changedBy || 'Admin')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  /* ── Section 2: audit trail from ContribLog sheet (allContribLog) ── */
+  const entries = allContribLog.filter(e => String(e.memberId) === String(memberId));
+  let section2Html = '';
+  if (entries.length) {
+    section2Html = `
+      <h6 class="fw-semibold mb-2" style="color:var(--accent);">Change Log</h6>
       <div class="table-responsive">
         <table class="table table-sm history-table mb-0">
           <thead><tr>
@@ -1421,20 +1466,26 @@ function showHistory(memberId, memberName) {
                 ? '<span style="color:#1a4a8a;font-weight:600;">Opening Balance</span>'
                 : new Date(parseInt(e.year), parseInt(e.month) - 1)
                     .toLocaleString('en', { month: 'short' }) + ' ' + e.year;
+              const notesHtml = e.notes
+                ? `<span style="color:#333;">${esc(e.notes)}</span>`
+                : '<span class="text-muted">—</span>';
               return `<tr>
                 <td style="white-space:nowrap;">${fmtTs(e.timestamp)}</td>
                 <td>${mLabel}</td>
                 <td><span class="${e.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(e.status)}</span></td>
                 <td>$${e.amount || 0}</td>
-                <td>${esc(e.notes || '—')}</td>
+                <td>${notesHtml}</td>
                 <td>${esc(e.changedBy || 'Admin')}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>`;
+  } else if (!section1Html) {
+    section2Html = '<div class="text-center text-muted py-4">No history recorded yet for this member.</div>';
   }
 
+  document.getElementById('hm-body').innerHTML = section1Html + section2Html;
   historyModalInst.show();
 }
 
