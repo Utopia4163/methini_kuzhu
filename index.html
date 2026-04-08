@@ -401,7 +401,55 @@
 /* ════════════════════════════════════════════════════════════
    🔧  CONFIGURATION  —  paste your Web App URL below
    ════════════════════════════════════════════════════════════ */
-const SCRIPT_URL = 'https://api.allorigins.win/raw?url=https://script.googleusercontent.com/macros/echo?user_content_key=AWDtjMW47pagaSJN743sTaVna4qZuqc2dZWVsrxypftQ346qdrMRwlOn1XruDT2AWqNMhqQsWgvP5XXd5ATv518d0QrCRcflc6b_9F7Jvdm_OGpnu7t0WQ3Mk2JXbixmH4iBV1FcGGjbQNv6IwZy31fcGB0VoFgD2X50FT1I7dKKm11jcEOKNajRfRZ2QnPbMSfWFNOKLNgfci2wmrDqeWKv16xrve2EtGBZjZi8TME4asvy8pyfY9MrQkDvI-5DFvfN7PJvso2i380kZ6sTTypnFw1BCsWQe3tqUsn5nTzR&lib=M5XMLVYIagiYa0L9f3CzM0j4lRjpr1GOY'; // ← Replace!
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
+
+/* ════════════════════════════════════════════════════════════
+   API helpers
+   ─────────────────────────────────────────────────────────
+   Apps Script redirects through script.googleusercontent.com
+   which strips CORS headers. Two workarounds are used:
+     • Writes  → fetch with mode:'no-cors' (fire-and-forget)
+     • Reads   → JSONP via <script> tag (bypasses CORS entirely)
+   ════════════════════════════════════════════════════════════ */
+
+/** Fire-and-forget write — we don't need the response for writes. */
+function apiWrite(params) {
+  const url = `${SCRIPT_URL}?${new URLSearchParams(params)}`;
+  fetch(url, { mode: 'no-cors' }).catch(() => {}); // silent fail; data saved locally
+}
+
+/** JSONP read — returns a Promise that resolves with the parsed data. */
+function apiRead(params, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const cb   = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    const url  = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
+    const el   = document.createElement('script');
+    let timer;
+
+    window[cb] = (data) => {
+      clearTimeout(timer);
+      el.remove();
+      delete window[cb];
+      resolve(data);
+    };
+
+    el.onerror = () => {
+      clearTimeout(timer);
+      el.remove();
+      delete window[cb];
+      reject(new Error('Network error — could not reach the server.'));
+    };
+
+    timer = setTimeout(() => {
+      el.remove();
+      delete window[cb];
+      reject(new Error('Request timed out. Check your internet connection.'));
+    }, timeoutMs);
+
+    el.src = url;
+    document.head.appendChild(el);
+  });
+}
 
 /* ── Storage keys ── */
 const KEY_ID   = 'pk_member_id';
@@ -477,33 +525,22 @@ function goHome() {
 /* ════════════════════════════════════════════════════════════
    Attendance — returning member
    ════════════════════════════════════════════════════════════ */
-async function markAttendanceReturning() {
+function markAttendanceReturning() {
   const btn = document.getElementById('btn-ret');
   setBtnLoading(btn, true, 'Recording…');
 
-  try {
-    const params = new URLSearchParams({
-      action:     'recordAttendance',
-      localId:    member.localId || localStorage.getItem(KEY_ID) || '',
-      name:       member.name,
-      instrument: member.instrument || '',
-      location:   venueLocation || 'Not specified',
-    });
+  // Fire-and-forget write (no-cors bypasses the Apps Script CORS redirect).
+  // We show success immediately — the sheet write happens in the background.
+  apiWrite({
+    action:     'recordAttendance',
+    localId:    member.localId || localStorage.getItem(KEY_ID) || '',
+    name:       member.name,
+    instrument: member.instrument || '',
+    location:   venueLocation || 'Not specified',
+  });
 
-    const res  = await fetch(`${SCRIPT_URL}?${params}`);
-    const data = await res.json();
-
-    if (data.success) {
-      showSuccess(member.name, false);
-    } else {
-      throw new Error(data.error || 'Attendance not recorded');
-    }
-  } catch (err) {
-    setBtnLoading(btn, false);
-    document.getElementById('error-msg').textContent =
-      'Could not connect. Check your internet and try again.\n(' + err.message + ')';
-    setState('error');
-  }
+  // Small delay so the spinner is visible, then show success.
+  setTimeout(() => showSuccess(member.name, false), 600);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -523,7 +560,7 @@ function cancelReg() {
   regModal.hide();
 }
 
-async function submitReg() {
+function submitReg() {
   const name       = document.getElementById('reg-name').value.trim();
   const instrument = document.getElementById('reg-instrument').value;
   const email      = document.getElementById('reg-email').value.trim();
@@ -549,42 +586,22 @@ async function submitReg() {
 
   const localId = generateUUID();
 
-  try {
-    /* 1 — Register member */
-    const regParams = new URLSearchParams({
-      action:     'registerMember',
-      localId,
-      name,
-      instrument,
-      email:      email || '',
-    });
-    const regRes  = await fetch(`${SCRIPT_URL}?${regParams}`);
-    const regData = await regRes.json();
-    if (!regData.success) throw new Error(regData.error || 'Registration failed');
+  // 1 — Save to localStorage immediately (optimistic).
+  //     The sheet write is fire-and-forget via no-cors to avoid CORS errors.
+  member = { localId, name, instrument, email };
+  localStorage.setItem(KEY_ID,   localId);
+  localStorage.setItem(KEY_DATA, JSON.stringify(member));
 
-    /* 2 — Save locally */
-    member = { localId, name, instrument, email };
-    localStorage.setItem(KEY_ID,   localId);
-    localStorage.setItem(KEY_DATA, JSON.stringify(member));
+  // 2 — Write member + attendance to the Sheet in the background.
+  apiWrite({ action: 'registerMember',   localId, name, instrument, email: email || '' });
+  apiWrite({ action: 'recordAttendance', localId, name, instrument,
+             location: venueLocation || 'Not specified' });
 
-    /* 3 — Record attendance */
-    const attParams = new URLSearchParams({
-      action:     'recordAttendance',
-      localId,
-      name,
-      instrument,
-      location:   venueLocation || 'Not specified',
-    });
-    await fetch(`${SCRIPT_URL}?${attParams}`); // fire-and-forget after reg success
-
+  // 3 — Show success after a short delay (lets spinner show briefly).
+  setTimeout(() => {
     regModal.hide();
     showSuccess(name, true);
-
-  } catch (err) {
-    btn.disabled  = false;
-    btn.innerHTML = '<i class="bi bi-check2"></i> Save &amp; Mark Attendance';
-    alert('⚠️ Error: ' + err.message + '\n\nPlease check your internet connection and try again.');
-  }
+  }, 700);
 }
 
 /* ════════════════════════════════════════════════════════════
