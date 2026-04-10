@@ -169,12 +169,13 @@
 
   <!-- ── State: signup form ── -->
   <div class="inv-state" id="state-signup">
-    <p style="font-size:0.83rem;color:#9a7060;margin-bottom:1.25rem;">
+    <p style="font-size:0.83rem;color:#9a7060;margin-bottom:1.25rem;" id="inv-signup-intro">
       <i class="bi bi-envelope-check me-1"></i>
       You've been invited to create an admin account.
     </p>
 
-    <input type="hidden" id="inv-token" value="">
+    <input type="hidden" id="inv-token"       value="">
+    <input type="hidden" id="inv-setup-token" value="">
 
     <div class="inv-field">
       <label class="inv-label" for="inv-name">Your name <span style="color:var(--red)">*</span></label>
@@ -339,37 +340,70 @@ function setSub(text) {
 /* ════════════════════════════════════════════════════════
    Boot
    ════════════════════════════════════════════════════════ */
-let _token = null;
+let _inviteToken = null;
+let _setupToken  = null;
 
 async function init() {
   setState('loading');
-  setSub('Checking your invite…');
+  setSub('Checking your link…');
 
   const params = new URLSearchParams(window.location.search);
-  _token = params.get('token');
+  _inviteToken = params.get('token');
+  _setupToken  = params.get('setup');
 
-  if (!_token) {
-    setState('notoken');
-    setSub('No invite link');
+  // ── Super admin setup flow ──────────────────────────────
+  if (_setupToken) {
+    setSub('Validating setup link…');
+    try {
+      const res = await apiRead({ action: 'validateSetupToken', token: _setupToken });
+      if (res.valid) {
+        document.getElementById('inv-setup-token').value = _setupToken;
+        document.getElementById('inv-signup-intro').innerHTML =
+          '<i class="bi bi-shield-lock me-1"></i>Create the super admin account.';
+        setState('signup');
+        setSub('Super admin setup');
+        // Clean token from URL bar without a reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        document.getElementById('inv-invalid-reason').textContent =
+          res.reason || 'This setup link is invalid or has expired. Run initSuperAdmin() again.';
+        setState('invalid');
+        setSub('Setup link invalid');
+      }
+    } catch {
+      setState('neterror');
+      setSub('Connection error');
+    }
     return;
   }
 
-  try {
-    const res = await apiRead({ action: 'validateInvite', token: _token });
-    if (res.valid) {
-      document.getElementById('inv-token').value = _token;
-      setState('signup');
-      setSub('Create your admin account');
-    } else {
-      document.getElementById('inv-invalid-reason').textContent =
-        res.reason || 'This link has expired or already been used. Ask an admin to generate a new one.';
-      setState('invalid');
-      setSub('Invite link invalid');
+  // ── Regular invite flow ─────────────────────────────────
+  if (_inviteToken) {
+    setSub('Checking your invite…');
+    try {
+      const res = await apiRead({ action: 'validateInvite', token: _inviteToken });
+      if (res.valid) {
+        document.getElementById('inv-token').value = _inviteToken;
+        setState('signup');
+        setSub('Create your admin account');
+        // Clean token from URL bar without a reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        document.getElementById('inv-invalid-reason').textContent =
+          res.reason || 'This link has expired or already been used. Ask an admin to generate a new one.';
+        setState('invalid');
+        setSub('Invite link invalid');
+      }
+    } catch {
+      setState('neterror');
+      setSub('Connection error');
     }
-  } catch {
-    setState('neterror');
-    setSub('Connection error');
+    return;
   }
+
+  // ── No token ────────────────────────────────────────────
+  setState('notoken');
+  setSub('No invite link');
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -392,11 +426,12 @@ function clearError() {
 async function doSignup() {
   clearError();
 
-  const name  = (document.getElementById('inv-name').value  || '').trim();
-  const email = (document.getElementById('inv-email').value || '').trim().toLowerCase();
-  const pw    = document.getElementById('inv-pw').value;
-  const pw2   = document.getElementById('inv-pw2').value;
-  const token = document.getElementById('inv-token').value;
+  const name       = (document.getElementById('inv-name').value        || '').trim();
+  const email      = (document.getElementById('inv-email').value       || '').trim().toLowerCase();
+  const pw         = document.getElementById('inv-pw').value;
+  const pw2        = document.getElementById('inv-pw2').value;
+  const invToken   = document.getElementById('inv-token').value;
+  const setupToken = document.getElementById('inv-setup-token').value;
 
   if (!name || !email || !pw) {
     showError('Name, email, and password are all required.'); return;
@@ -417,13 +452,20 @@ async function doSignup() {
     const salt = generateSalt();
     const hash = await deriveKey(pw, salt);
 
-    const res = await apiRead({
+    // Build payload — exactly one token type will be set
+    const payload = {
       action: 'createAdmin',
       name, email, hash, salt,
       iterations: 200000,
-      inviteToken: token,
       createdBy: email,
-    });
+    };
+    if (setupToken) {
+      payload.setupToken  = setupToken;
+    } else {
+      payload.inviteToken = invToken;
+    }
+
+    const res = await apiRead(payload);
 
     if (res.success) {
       setSession(res.email || email, res.name || name);

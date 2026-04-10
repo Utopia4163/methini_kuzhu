@@ -36,24 +36,6 @@
       </div>
     </div>
 
-    <!-- Invite-only signup (shown only when ?invite= token is valid) -->
-    <div class="setup-section" id="setup-section" style="display:none;">
-      <p style="font-size:0.85rem;color:#9a7060;">
-        <i class="bi bi-envelope-check me-1"></i>
-        You've been invited to create an admin account.
-      </p>
-      <input type="hidden"   id="setup-invite-token" value="">
-      <input type="hidden"   id="setup-setup-token"  value="">
-      <input type="text"     class="login-input" id="setup-name"  placeholder="Your name" autocomplete="name">
-      <input type="email"    class="login-input" id="setup-email" placeholder="Email address" autocomplete="email">
-      <input type="password" class="login-input" id="setup-pw"    placeholder="New password (min 8 chars)">
-      <input type="password" class="login-input" id="setup-pw2"   placeholder="Confirm password"
-             onkeyup="if(event.key==='Enter') doSetup()">
-      <button class="login-btn green" id="setup-btn" onclick="doSetup()">
-        <i class="bi bi-check2 me-2"></i>Create Account &amp; Login
-      </button>
-      <div class="login-error" id="setup-error"></div>
-    </div>
   </div>
 </div>
 

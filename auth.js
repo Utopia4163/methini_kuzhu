@@ -112,43 +112,8 @@ async function authBoot() {
     return;
   }
 
-  const params     = new URLSearchParams(window.location.search);
-  const inviteToken = params.get('invite');
-  const setupToken  = params.get('setup');
-
-  // Setup token in URL → super admin bootstrap
-  if (setupToken) {
-    _setLoginSub('Validating setup link…');
-    try {
-      const res = await apiRead({ action: 'validateSetupToken', token: setupToken });
-      if (res.valid) {
-        _showSignupForm(null, setupToken);
-      } else {
-        _showInviteError(res.reason || 'Invalid or expired setup link.');
-      }
-    } catch {
-      _showInviteError('Could not validate setup link. Check your connection.');
-    }
-    return;
-  }
-
-  // Invite token in URL → validate and show signup form
-  if (inviteToken) {
-    _setLoginSub('Validating invite…');
-    try {
-      const res = await apiRead({ action: 'validateInvite', token: inviteToken });
-      if (res.valid) {
-        _showSignupForm(inviteToken, null);
-      } else {
-        _showInviteError(res.reason || 'Invalid invite link.');
-      }
-    } catch {
-      _showInviteError('Could not validate invite link. Check your connection.');
-    }
-    return;
-  }
-
   // Default — show login form
+  // (Invite and setup flows are handled by invite.html)
   document.getElementById('login-form').style.display    = '';
   document.getElementById('setup-section').style.display = 'none';
   _setLoginSub('Admin Dashboard');
