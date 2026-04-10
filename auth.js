@@ -112,15 +112,33 @@ async function authBoot() {
     return;
   }
 
+  const params     = new URLSearchParams(window.location.search);
+  const inviteToken = params.get('invite');
+  const setupToken  = params.get('setup');
+
+  // Setup token in URL → super admin bootstrap
+  if (setupToken) {
+    _setLoginSub('Validating setup link…');
+    try {
+      const res = await apiRead({ action: 'validateSetupToken', token: setupToken });
+      if (res.valid) {
+        _showSignupForm(null, setupToken);
+      } else {
+        _showInviteError(res.reason || 'Invalid or expired setup link.');
+      }
+    } catch {
+      _showInviteError('Could not validate setup link. Check your connection.');
+    }
+    return;
+  }
+
   // Invite token in URL → validate and show signup form
-  const params = new URLSearchParams(window.location.search);
-  const token  = params.get('invite');
-  if (token) {
+  if (inviteToken) {
     _setLoginSub('Validating invite…');
     try {
-      const res = await apiRead({ action: 'validateInvite', token });
+      const res = await apiRead({ action: 'validateInvite', token: inviteToken });
       if (res.valid) {
-        _showSignupForm(token);
+        _showSignupForm(inviteToken, null);
       } else {
         _showInviteError(res.reason || 'Invalid invite link.');
       }
@@ -190,7 +208,8 @@ async function doSetup() {
   const email  = (document.getElementById('setup-email').value || '').trim().toLowerCase();
   const pw     = document.getElementById('setup-pw').value;
   const pw2    = document.getElementById('setup-pw2').value;
-  const token  = (document.getElementById('setup-invite-token').value || '').trim();
+  const token       = (document.getElementById('setup-invite-token').value || '').trim();
+  const setupToken  = (document.getElementById('setup-setup-token').value  || '').trim();
   const errEl  = document.getElementById('setup-error');
   errEl.style.display = 'none';
 
@@ -216,7 +235,8 @@ async function doSetup() {
       action: 'createAdmin',
       name, email, hash, salt,
       iterations: 200000,
-      inviteToken: token,
+      inviteToken: token      || undefined,
+      setupToken:  setupToken || undefined,
       createdBy: email,
     });
 
@@ -327,12 +347,13 @@ function _setupErr(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
-function _showSignupForm(token) {
+function _showSignupForm(inviteToken, setupToken) {
   document.getElementById('login-form').style.display    = 'none';
   document.getElementById('setup-section').style.display = 'block';
-  document.getElementById('setup-invite-token').value    = token;
-  _setLoginSub('Create your admin account');
-  // Remove ?invite= from URL bar without a page reload
+  document.getElementById('setup-invite-token').value    = inviteToken || '';
+  document.getElementById('setup-setup-token').value     = setupToken  || '';
+  _setLoginSub(setupToken ? 'Create super admin account' : 'Create your admin account');
+  // Clean the token params from the URL bar without a page reload
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 
