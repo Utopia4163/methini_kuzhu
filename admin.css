@@ -292,7 +292,8 @@ body {
   opacity: 0; transition: opacity 0.2s;
   pointer-events: none;
 }
-.pk-toast.show { opacity: 1; }
+.pk-toast.show        { opacity: 1; }
+.pk-toast.toast-error { background: #7a1010; }
 
 /* ══ CONTRIBUTION YEAR TABLE ═══════════════════════════════ */
 .contrib-year-wrap {
@@ -483,12 +484,12 @@ body {
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text, #f5e6d3);
+  color: #f5e6d3;          /* explicit light colour — dark background, so --text (#2c1810) is invisible */
   font-size: 0.875rem;
   min-width: 90px;
   flex: 1;
 }
-.tag-input-text::placeholder { color: #5a3020; }
+.tag-input-text::placeholder { color: #a07858; }
 
 /* Edit Tags button in Members table */
 .edit-tags-btn {
@@ -689,6 +690,61 @@ body {
   font-size: 0.85rem;
 }
 .att-detail-row:last-child { border-bottom: none; }
+
+/* Void button inside each attendance row */
+.att-void-btn {
+  background: none;
+  border: 1px solid #7a2010;
+  border-radius: 6px;
+  color: #c04030;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.att-void-btn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+
+/* Mark-attendance action bar at the bottom of the detail panel */
+.att-detail-actions {
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.att-mark-sel {
+  flex: 1;
+  min-width: 130px;
+  background: #3a1a0c;
+  border: 1px solid #6a3020;
+  color: #f5e6d3;          /* explicit light colour — same reason as tag-input-text */
+  border-radius: 8px;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+}
+.att-mark-sel option { background: #3a1a0c; color: #f5e6d3; }
+.att-mark-btn {
+  background: var(--green);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: background 0.15s;
+}
+.att-mark-btn:hover    { background: #1e8a4a; }
+.att-mark-btn:disabled { background: #6c757d; cursor: not-allowed; }
+
 /* Legend */
 .att-legend {
   display: flex;
