@@ -284,6 +284,15 @@
     </button>
   </div>
 
+  <!-- ─ Already marked (duplicate within 4-hour window) ─ -->
+  <div id="state-already" class="pk-state" style="text-align:center;">
+    <div class="pk-big-icon">🥁</div>
+    <div class="pk-heading" style="color:var(--orange);">Already Here!</div>
+    <p class="pk-sub" id="already-msg">You're already marked present for today's session.</p>
+    <button class="pk-btn" style="max-width:200px;margin-top:1.5rem;font-size:1rem;padding:0.8rem;background:var(--orange);"
+            onclick="goHome()">Done</button>
+  </div>
+
   <!-- ─ Error ─ -->
   <div id="state-error" class="pk-state" style="text-align:center;">
     <div class="pk-big-icon">⚠️</div>
@@ -364,8 +373,24 @@ function apiWrite(params) {
 }
 
 /* ── Storage keys ── */
-const KEY_ID   = 'pk_member_id';
-const KEY_DATA = 'pk_member_data';
+const KEY_ID      = 'pk_member_id';
+const KEY_DATA    = 'pk_member_data';
+const KEY_CHECKIN = 'pk_last_checkin';  // ISO timestamp of last successful check-in
+
+/* ── JSONP read (used for recordAttendance so we can inspect the response) ── */
+function apiRead(params, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const cb  = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    const url = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
+    const el  = document.createElement('script');
+    let timer;
+    window[cb] = data => { clearTimeout(timer); el.remove(); delete window[cb]; resolve(data); };
+    el.onerror  = ()   => { clearTimeout(timer); el.remove(); delete window[cb]; reject(new Error('Network error')); };
+    timer = setTimeout(() => { el.remove(); delete window[cb]; reject(new Error('Timeout')); }, timeoutMs);
+    el.src = url;
+    document.head.appendChild(el);
+  });
+}
 
 /* ── Runtime ── */
 let member   = null;   // { localId, name, email }
@@ -427,17 +452,44 @@ function goHome() {
 /* ════════════════════════════════════════════════════════════
    Attendance — returning member
    ════════════════════════════════════════════════════════════ */
-function markAttendanceReturning() {
+async function markAttendanceReturning() {
   const btn = document.getElementById('btn-ret');
+
+  // ── Client-side fast-path: check localStorage 4-hour window ──
+  // Catches the duplicate instantly without any API call — same
+  // 4-hour rule as the server.
+  const lastTs = localStorage.getItem(KEY_CHECKIN);
+  if (lastTs) {
+    const elapsed = Date.now() - new Date(lastTs).getTime();
+    if (elapsed < 4 * 60 * 60 * 1000) {
+      const at = new Date(lastTs).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+      showAlready(at);
+      return;
+    }
+  }
+
   setBtnLoading(btn, true, 'Recording…');
 
-  apiWrite({
-    action:  'recordAttendance',
-    localId: member.localId || localStorage.getItem(KEY_ID) || '',
-    name:    member.name,
-  });
+  try {
+    // Use JSONP (apiRead) so we can inspect the server response and
+    // distinguish a fresh check-in from a server-side duplicate catch.
+    const data = await apiRead({
+      action:  'recordAttendance',
+      localId: member.localId || localStorage.getItem(KEY_ID) || '',
+      name:    member.name,
+    });
 
-  setTimeout(() => showSuccess(member.name, false), 600);
+    if (data.duplicate) {
+      showAlready(data.checkedInAt || null);
+    } else {
+      showSuccess(member.name, false);
+    }
+  } catch {
+    document.getElementById('error-msg').textContent = 'Unable to connect. Please try again.';
+    setState('error');
+  } finally {
+    setBtnLoading(btn, false);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -488,6 +540,9 @@ function submitReg() {
    ════════════════════════════════════════════════════════════ */
 function showSuccess(name, isNew) {
   const now  = new Date();
+  // Cache check-in time so the client-side 4-hour guard works on next tap
+  localStorage.setItem(KEY_CHECKIN, now.toISOString());
+
   const time = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
   const date = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -496,6 +551,17 @@ function showSuccess(name, isNew) {
 
   document.getElementById('success-msg').innerHTML = msg;
   setState('success');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Already marked (duplicate within 4-hour window)
+   ════════════════════════════════════════════════════════════ */
+function showAlready(checkedInAt) {
+  const name = member?.name || 'You';
+  let msg = `<strong>${escHtml(name)}</strong>, you're already marked present for today's session.`;
+  if (checkedInAt) msg += `<br><span style="color:var(--muted);font-size:0.9em;">Checked in at ${checkedInAt}.</span>`;
+  document.getElementById('already-msg').innerHTML = msg;
+  setState('already');
 }
 
 /* ════════════════════════════════════════════════════════════
