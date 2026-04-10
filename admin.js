@@ -40,6 +40,7 @@ function enterAdmin(name, email) {
   document.getElementById('admin-panel').style.display  = 'block';
   document.getElementById('navbar-admin-name').textContent =
     name ? `${name} (${email})` : (email || 'Admin');
+  switchTab('mem');
   initDashboard();
 }
 
