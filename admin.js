@@ -392,18 +392,22 @@ function renderAttCalendar() {
     document.getElementById('att-leg-absent').textContent  = 'No record';
   }
 
+  // Precompute today as a plain Date (midnight) for future-date comparison
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
   // Build week rows
   const weeksHtml = [];
   for (let w = 0; w < cells.length / 7; w++) {
     const dayCells = cells.slice(w * 7, w * 7 + 7).map(dayNum => {
       if (dayNum === null) return `<div class="att-day-cell att-other-month"></div>`;
 
-      const key     = _fmtDateKey(dayNum, _attMonth + 1, _attYear);
-      const isToday = key === todayKey;
-      const isSel   = key === _attSelectedDay;
-      const numCls  = isToday ? 'att-day-num att-today-num' : 'att-day-num';
-      let inner     = `<div class="${numCls}">${dayNum}</div>`;
-      let hasAtt    = false;
+      const key      = _fmtDateKey(dayNum, _attMonth + 1, _attYear);
+      const isToday  = key === todayKey;
+      const isSel    = key === _attSelectedDay;
+      const isFuture = new Date(_attYear, _attMonth, dayNum) > todayMid;
+      const numCls   = isToday ? 'att-day-num att-today-num' : 'att-day-num';
+      let inner      = `<div class="${numCls}">${dayNum}</div>`;
+      let hasAtt     = false;
 
       if (isIndividual) {
         hasAtt = memberDates.has(key);
@@ -422,9 +426,14 @@ function renderAttCalendar() {
         }
       }
 
-      const cls     = ['att-day-cell', hasAtt ? 'att-has-data' : '', isSel ? 'att-selected' : '']
+      // Future cells: greyed out, not clickable (no data-date)
+      // Past / today cells: always clickable regardless of whether they have data
+      const cls     = ['att-day-cell',
+                        hasAtt    ? 'att-has-data' : '',
+                        isSel     ? 'att-selected' : '',
+                        isFuture  ? 'att-future'   : '']
                         .filter(Boolean).join(' ');
-      const datAttr = hasAtt ? `data-date="${key}"` : '';
+      const datAttr = isFuture ? '' : `data-date="${key}"`;
 
       return `<div class="${cls}" ${datAttr}>${inner}</div>`;
     }).join('');
@@ -433,12 +442,13 @@ function renderAttCalendar() {
 
   document.getElementById('att-cal-weeks').innerHTML = weeksHtml.join('');
 
-  // Restore detail panel if selected day still has data
+  // Restore detail panel for the selected day (even if it has no data, so
+  // the Mark Attendance form stays open after marking the first record).
+  // Close only if the selected day is now a future date.
   if (_attSelectedDay) {
-    const still = isIndividual
-      ? memberDates.has(_attSelectedDay)
-      : !!(_attDayMap[_attSelectedDay]?.length);
-    still ? _showAttDay(_attSelectedDay, true) : closeAttDetail();
+    const [sd, sm, sy] = _attSelectedDay.split('/').map(Number);
+    const selIsFuture  = new Date(sy, sm - 1, sd) > todayMid;
+    selIsFuture ? closeAttDetail() : _showAttDay(_attSelectedDay, true);
   }
 
   // Keep heatmap in sync if it's the active view

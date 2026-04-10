@@ -612,9 +612,19 @@ body {
 }
 .att-day-cell:last-child { border-right: none; }
 .att-day-cell.att-other-month { background: #faf7f4; }
+/* Past/today cells are always clickable (even if empty — for marking new attendance) */
+.att-day-cell:not(.att-other-month):not(.att-future) { cursor: pointer; }
+.att-day-cell:not(.att-other-month):not(.att-future):hover { background: #fdf8f4; }
 .att-day-cell.att-has-data   { cursor: pointer; }
 .att-day-cell.att-has-data:hover { background: #fdf8f4; }
 .att-day-cell.att-selected   { background: #fff8ee !important; outline: 2px solid var(--orange); outline-offset: -2px; }
+/* Future dates: visually dimmed and not interactive */
+.att-day-cell.att-future {
+  opacity: 0.32;
+  cursor: default !important;
+  pointer-events: none;
+}
+.att-day-cell.att-future .att-day-num { color: var(--muted); }
 /* Day number */
 .att-day-num {
   font-size: 0.78rem;
