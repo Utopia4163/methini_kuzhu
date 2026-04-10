@@ -143,10 +143,39 @@
       animation: spin 0.7s linear infinite;
     }
 
-    /* ── Welcome copy (new user) ── */
-    .pk-welcome { text-align: center; margin-bottom: 1.25rem; }
-    .pk-welcome h2 { font-size: 1.4rem; color: var(--orange); margin-bottom: 0.4rem; }
-    .pk-welcome p  { font-size: 0.9rem; color: var(--muted); margin: 0; }
+    /* ── Email lookup input ── */
+    .pk-lookup-wrap {
+      width: 100%;
+      margin-bottom: 1.25rem;
+    }
+    .pk-lookup-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .pk-input {
+      width: 100%;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      font-size: 1rem;
+      padding: 0.9rem 1.1rem;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    .pk-input:focus            { border-color: var(--orange); }
+    .pk-input::placeholder     { color: var(--faint); }
+    .pk-input.pk-input-error   { border-color: var(--red); }
+    .pk-lookup-hint {
+      font-size: 0.78rem;
+      color: var(--faint);
+      margin-top: 0.45rem;
+      text-align: center;
+    }
+    .pk-lookup-hint.pk-hint-error { color: #e74c3c; }
 
     /* ── Success / Error ── */
     .pk-big-icon { font-size: 4.5rem; line-height: 1; margin-bottom: 0.75rem; }
@@ -164,60 +193,6 @@
       font-size: 0.72rem;
       color: #3a2010;
       flex-shrink: 0;
-    }
-
-    /* ── Modal dark theme ── */
-    .modal-content {
-      background: #2a130a;
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      color: var(--text);
-    }
-    .modal-header   { border-bottom: 1px solid var(--border); }
-    .modal-footer   { border-top: 1px solid var(--border); }
-    .modal-title    { color: var(--orange); font-weight: 700; }
-    .btn-close      { filter: invert(1) brightness(0.6); }
-    .form-label     { color: #c09070; font-weight: 500; font-size: 0.9rem; }
-    .form-control, .form-select {
-      background: #3a1a0c;
-      border: 1px solid #6a3020;
-      color: var(--text);
-      border-radius: 10px;
-    }
-    .form-control:focus, .form-select:focus {
-      background: #3a1a0c;
-      border-color: var(--orange);
-      color: var(--text);
-      box-shadow: 0 0 0 0.2rem rgba(230,126,34,0.22);
-    }
-    .form-control::placeholder { color: #6a4030; }
-    .form-select option         { background: #3a1a0c; color: var(--text); }
-    .form-control.is-invalid    { border-color: var(--red); }
-    .invalid-feedback           { color: #e74c3c; }
-
-    .modal-submit-btn {
-      background: var(--red);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      padding: 0.65rem 1.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: background 0.2s;
-    }
-    .modal-submit-btn:hover    { background: #a93226; }
-    .modal-submit-btn:disabled { background: #6c757d; cursor: not-allowed; }
-
-    .modal-cancel-btn {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      padding: 0.5rem 1rem;
     }
 
     /* ── Misc ── */
@@ -260,16 +235,38 @@
     </div>
   </div>
 
-  <!-- ─ New / first-time ─ -->
-  <div id="state-new" class="pk-state">
-    <div class="pk-welcome">
-      <h2>Welcome! 👋</h2>
-      <p>First time here? Tap the button to register<br>and mark your attendance instantly.</p>
+  <!-- ─ Email lookup (first-time / after reset) ─ -->
+  <div id="state-lookup" class="pk-state">
+    <div class="pk-lookup-wrap">
+      <label class="pk-lookup-label" for="lookup-email">Enter your email to check in:</label>
+      <input type="email" class="pk-input" id="lookup-email"
+             placeholder="your@email.com"
+             autocomplete="email" inputmode="email"
+             onkeyup="if(event.key==='Enter') doLookup()">
+      <div class="pk-lookup-hint" id="lookup-hint"> </div>
     </div>
 
-    <button class="pk-btn" id="btn-new" onclick="showRegModal()">
-      <i class="bi bi-person-plus" style="font-size:1.4rem;"></i>
-      Register &amp; Mark Attendance
+    <button class="pk-btn" id="btn-lookup" onclick="doLookup()">
+      <i class="bi bi-search" style="font-size:1.2rem;"></i>
+      Find Me
+    </button>
+
+    <div class="pk-link" style="margin-top:1.2rem;">
+      Not registered? <a onclick="showNotRegistered()">Contact your admin</a>
+    </div>
+  </div>
+
+  <!-- ─ Not registered info ─ -->
+  <div id="state-not-registered" class="pk-state" style="text-align:center;">
+    <div class="pk-big-icon">🥁</div>
+    <div class="pk-heading" style="color:var(--orange);">Not Registered Yet</div>
+    <p class="pk-sub">
+      Ask your group admin to add you as a member — they'll only need your name and email.
+      Once registered, come back here and enter your email to check in.
+    </p>
+    <button class="pk-btn" style="max-width:220px;margin-top:1.5rem;font-size:1rem;padding:0.8rem;background:var(--orange);"
+            onclick="setState('lookup')">
+      Back
     </button>
   </div>
 
@@ -309,56 +306,6 @@
 <!-- ══ FOOTER ═════════════════════════════════════════════════ -->
 <footer class="pk-footer">Parai Kuzhu · Attendance System</footer>
 
-<!-- ══ REGISTRATION MODAL ════════════════════════════════════ -->
-<div class="modal fade" id="regModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-
-      <div class="modal-header px-4 pt-4 pb-3">
-        <h5 class="modal-title">
-          <i class="bi bi-person-plus me-2"></i>Join the Kuzhu
-        </h5>
-      </div>
-
-      <div class="modal-body px-4">
-        <p style="color:var(--muted);font-size:0.88rem;margin-bottom:1.25rem;">
-          First time here! Tell us a little about yourself.
-        </p>
-
-        <!-- Name -->
-        <div class="mb-3">
-          <label class="form-label" for="reg-name">
-            Your Name <span style="color:var(--red)">*</span>
-          </label>
-          <input type="text" class="form-control" id="reg-name"
-                 placeholder="e.g. Senthil Kumar"
-                 autocomplete="name" inputmode="text">
-          <div class="invalid-feedback">Please enter your name.</div>
-        </div>
-
-        <!-- Email (optional) -->
-        <div class="mb-1">
-          <label class="form-label" for="reg-email">
-            Email <span style="color:var(--faint);font-weight:400;">(optional)</span>
-          </label>
-          <input type="email" class="form-control" id="reg-email"
-                 placeholder="your@email.com"
-                 autocomplete="email" inputmode="email">
-        </div>
-      </div>
-
-      <div class="modal-footer px-4 pb-4 pt-3">
-        <button class="modal-cancel-btn" onclick="cancelReg()">Cancel</button>
-        <button class="modal-submit-btn" id="btn-reg-submit" onclick="submitReg()">
-          <i class="bi bi-check2"></i>
-          Save &amp; Mark Attendance
-        </button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
@@ -377,7 +324,7 @@ const KEY_ID      = 'pk_member_id';
 const KEY_DATA    = 'pk_member_data';
 const KEY_CHECKIN = 'pk_last_checkin';  // ISO timestamp of last successful check-in
 
-/* ── JSONP read (used for recordAttendance so we can inspect the response) ── */
+/* ── JSONP read — used for any call where we need to inspect the response ── */
 function apiRead(params, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const cb  = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -393,16 +340,12 @@ function apiRead(params, timeoutMs = 10000) {
 }
 
 /* ── Runtime ── */
-let member   = null;   // { localId, name, email }
-let regModal = null;
+let member = null;   // { localId, name, email }
 
 /* ════════════════════════════════════════════════════════════
    Init
    ════════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
-  regModal = new bootstrap.Modal(document.getElementById('regModal'));
-  init();
-});
+document.addEventListener('DOMContentLoaded', () => { init(); });
 
 async function init() {
   setState('loading');
@@ -416,10 +359,10 @@ async function init() {
     } catch {
       localStorage.removeItem(KEY_ID);
       localStorage.removeItem(KEY_DATA);
-      setState('new');
+      setState('lookup');
     }
   } else {
-    setState('new');
+    setState('lookup');
   }
 }
 
@@ -446,18 +389,126 @@ function showReturning() {
 }
 
 function goHome() {
-  member ? showReturning() : setState('new');
+  if (member) {
+    showReturning();
+  } else {
+    resetLookupUI();
+    setState('lookup');
+  }
+}
+
+function showNotRegistered() {
+  setState('not-registered');
 }
 
 /* ════════════════════════════════════════════════════════════
-   Attendance — returning member
+   Email Lookup — replaces self-registration
+   ════════════════════════════════════════════════════════════ */
+function resetLookupUI() {
+  const emailEl = document.getElementById('lookup-email');
+  const hintEl  = document.getElementById('lookup-hint');
+  emailEl.value = '';
+  emailEl.classList.remove('pk-input-error');
+  hintEl.textContent = ' ';
+  hintEl.className   = 'pk-lookup-hint';
+
+  const btn = document.getElementById('btn-lookup');
+  btn.innerHTML = '<i class="bi bi-search" style="font-size:1.2rem;"></i> Find Me';
+  btn.classList.remove('pk-btn-loading');
+  btn.disabled = false;
+}
+
+async function doLookup() {
+  const emailEl = document.getElementById('lookup-email');
+  const hintEl  = document.getElementById('lookup-hint');
+  const btn     = document.getElementById('btn-lookup');
+  const email   = emailEl.value.trim().toLowerCase();
+
+  // Basic validation
+  if (!email) {
+    emailEl.classList.add('pk-input-error');
+    hintEl.textContent = 'Please enter your email address.';
+    hintEl.className   = 'pk-lookup-hint pk-hint-error';
+    emailEl.focus();
+    return;
+  }
+
+  emailEl.classList.remove('pk-input-error');
+  hintEl.textContent = ' ';
+  hintEl.className   = 'pk-lookup-hint';
+
+  setBtnLoading(btn, true, 'Looking up…');
+
+  try {
+    const data = await apiRead({ action: 'getMemberByEmail', email });
+
+    if (!data.found) {
+      // Not registered — show friendly message
+      emailEl.classList.add('pk-input-error');
+      hintEl.textContent = 'Email not found. Contact your admin to be registered.';
+      hintEl.className   = 'pk-lookup-hint pk-hint-error';
+      setBtnLoading(btn, false);
+      return;
+    }
+
+    // Found — save to localStorage and proceed
+    member = { localId: data.localId, name: data.name, email: data.email };
+    localStorage.setItem(KEY_ID,   member.localId);
+    localStorage.setItem(KEY_DATA, JSON.stringify(member));
+
+    // Now mark attendance automatically
+    await markAttendanceAfterLookup(btn);
+
+  } catch {
+    setBtnLoading(btn, false);
+    document.getElementById('error-msg').textContent = 'Unable to connect. Please try again.';
+    setState('error');
+  }
+}
+
+/* Called right after a successful email lookup — marks attendance in the same flow */
+async function markAttendanceAfterLookup(btn) {
+  setBtnLoading(btn, true, 'Recording…');
+
+  // Client-side 4-hour fast-path
+  const lastTs = localStorage.getItem(KEY_CHECKIN);
+  if (lastTs) {
+    const elapsed = Date.now() - new Date(lastTs).getTime();
+    if (elapsed < 4 * 60 * 60 * 1000) {
+      const at = new Date(lastTs).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+      setBtnLoading(btn, false);
+      showAlready(at);
+      return;
+    }
+  }
+
+  try {
+    const data = await apiRead({
+      action:  'recordAttendance',
+      localId: member.localId,
+      name:    member.name,
+    });
+
+    if (data.duplicate) {
+      showAlready(data.checkedInAt || null);
+    } else {
+      showSuccess(member.name, false);
+    }
+  } catch {
+    document.getElementById('error-msg').textContent = 'Unable to connect. Please try again.';
+    setState('error');
+  } finally {
+    setBtnLoading(btn, false);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Attendance — returning member (cached in localStorage)
    ════════════════════════════════════════════════════════════ */
 async function markAttendanceReturning() {
   const btn = document.getElementById('btn-ret');
 
   // ── Client-side fast-path: check localStorage 4-hour window ──
-  // Catches the duplicate instantly without any API call — same
-  // 4-hour rule as the server.
   const lastTs = localStorage.getItem(KEY_CHECKIN);
   if (lastTs) {
     const elapsed = Date.now() - new Date(lastTs).getTime();
@@ -471,8 +522,7 @@ async function markAttendanceReturning() {
   setBtnLoading(btn, true, 'Recording…');
 
   try {
-    // Use JSONP (apiRead) so we can inspect the server response and
-    // distinguish a fresh check-in from a server-side duplicate catch.
+    // Use JSONP (apiRead) so we can inspect the server response
     const data = await apiRead({
       action:  'recordAttendance',
       localId: member.localId || localStorage.getItem(KEY_ID) || '',
@@ -493,52 +543,9 @@ async function markAttendanceReturning() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   Registration — new member
-   ════════════════════════════════════════════════════════════ */
-function showRegModal() {
-  document.getElementById('reg-name').value  = '';
-  document.getElementById('reg-email').value = '';
-  document.getElementById('reg-name').classList.remove('is-invalid');
-  regModal.show();
-  setTimeout(() => document.getElementById('reg-name').focus(), 350);
-}
-
-function cancelReg() {
-  regModal.hide();
-}
-
-function submitReg() {
-  const name  = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-
-  if (!name) {
-    document.getElementById('reg-name').classList.add('is-invalid');
-    return;
-  }
-  document.getElementById('reg-name').classList.remove('is-invalid');
-
-  const btn     = document.getElementById('btn-reg-submit');
-  btn.disabled  = true;
-  btn.innerHTML = '<div class="pk-btn-spinner" style="width:18px;height:18px;border-width:2px;"></div> Saving…';
-
-  const localId = generateUUID();
-  member = { localId, name, email };
-  localStorage.setItem(KEY_ID,   localId);
-  localStorage.setItem(KEY_DATA, JSON.stringify(member));
-
-  apiWrite({ action: 'registerMember',   localId, name, instrument: '', email: email || '' });
-  apiWrite({ action: 'recordAttendance', localId, name });
-
-  setTimeout(() => {
-    regModal.hide();
-    showSuccess(name, true);
-  }, 700);
-}
-
-/* ════════════════════════════════════════════════════════════
    Success
    ════════════════════════════════════════════════════════════ */
-function showSuccess(name, isNew) {
+function showSuccess(name) {
   const now  = new Date();
   // Cache check-in time so the client-side 4-hour guard works on next tap
   localStorage.setItem(KEY_CHECKIN, now.toISOString());
@@ -546,7 +553,7 @@ function showSuccess(name, isNew) {
   const time = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
   const date = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  let msg = `${isNew ? 'Welcome to the Kuzhu, ' : 'Great to see you, '}<strong>${escHtml(name)}</strong>!<br>`;
+  let msg = `Great to see you, <strong>${escHtml(name)}</strong>!<br>`;
   msg    += `Recorded at ${time} on ${date}.`;
 
   document.getElementById('success-msg').innerHTML = msg;
@@ -571,20 +578,15 @@ function resetMember() {
   if (!confirm('This will remove your saved details from this device.\nAre you sure?')) return;
   localStorage.removeItem(KEY_ID);
   localStorage.removeItem(KEY_DATA);
+  localStorage.removeItem(KEY_CHECKIN);
   member = null;
-  setState('new');
+  resetLookupUI();
+  setState('lookup');
 }
 
 /* ════════════════════════════════════════════════════════════
    Utilities
    ════════════════════════════════════════════════════════════ */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
-}
-
 function setBtnLoading(btn, loading, label) {
   if (loading) {
     btn._orig     = btn.innerHTML;

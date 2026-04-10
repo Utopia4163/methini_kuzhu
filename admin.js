@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════
    🔧  CONFIGURATION  —  paste your Web App URL below
    ════════════════════════════════════════════════════════════ */
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
+const SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'; // ← Replace!
 
 /* ── Auth / identity keys ── */
 const AUTH_KEY        = 'pk_admin_hash';
@@ -698,6 +698,7 @@ function openAddMemberModal() {
   document.getElementById('am-name').value  = '';
   document.getElementById('am-email').value = '';
   document.getElementById('am-name').classList.remove('is-invalid');
+  document.getElementById('am-email').classList.remove('is-invalid');
   _resetTagInput('am', '');
   addMemberModalInst.show();
   setTimeout(() => document.getElementById('am-name').focus(), 350);
@@ -707,11 +708,21 @@ async function submitAddMember() {
   const name  = document.getElementById('am-name').value.trim();
   const email = document.getElementById('am-email').value.trim();
 
+  let valid = true;
   if (!name) {
     document.getElementById('am-name').classList.add('is-invalid');
-    return;
+    valid = false;
+  } else {
+    document.getElementById('am-name').classList.remove('is-invalid');
   }
-  document.getElementById('am-name').classList.remove('is-invalid');
+  if (!email) {
+    document.getElementById('am-email').classList.add('is-invalid');
+    document.getElementById('am-email-feedback').textContent = 'Email is required.';
+    valid = false;
+  } else {
+    document.getElementById('am-email').classList.remove('is-invalid');
+  }
+  if (!valid) return;
 
   const typedTag = document.getElementById('am-tag-text').value.replace(/,/g,'').trim();
   if (typedTag) _addTag('am', typedTag);
@@ -721,17 +732,34 @@ async function submitAddMember() {
   btn.disabled = true;
   btn.innerHTML = '<span class="pk-spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.2);display:inline-block;vertical-align:middle;"></span> Adding…';
 
-  const localId = generateUUID();
-  apiWrite({ action: 'registerMember', localId, name, tags, email: email || '' });
+  try {
+    const localId = generateUUID();
+    // Use apiRead (JSONP) so we can inspect the response and catch email conflicts
+    const data = await apiRead({ action: 'registerMember', localId, name, tags, email });
 
-  await new Promise(r => setTimeout(r, 1300));
-  addMemberModalInst.hide();
-  btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Add Member';
+    if (data.emailConflict) {
+      // Email already in use — show inline error, leave modal open
+      const feedback = document.getElementById('am-email-feedback');
+      feedback.textContent = data.error || 'This email is already registered to another member.';
+      document.getElementById('am-email').classList.add('is-invalid');
+      return;
+    }
 
-  await Promise.all([loadMembers(), loadAllContribs()]);
-  updateTopStats();
-  showToast(`${name} added ✓`);
+    if (!data.success && data.error) {
+      showToast(`Error: ${data.error}`, 'error');
+      return;
+    }
+
+    addMemberModalInst.hide();
+    await Promise.all([loadMembers(), loadAllContribs()]);
+    updateTopStats();
+    showToast(`${name} added ✓`);
+  } catch (err) {
+    showToast('Network error — please try again.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Add Member';
+  }
 }
 
 function generateUUID() {
@@ -1211,10 +1239,11 @@ function fmtTs(ts) {
 }
 
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, type) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.toggle('toast-error', type === 'error');
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); el.classList.remove('toast-error'); }, type === 'error' ? 4000 : 2800);
 }
