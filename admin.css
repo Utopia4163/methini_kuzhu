@@ -872,3 +872,64 @@ body {
 .hm-row-focused td.hm-name-col { background: #fff8ee !important; color: var(--orange); }
 .hm-row-focused td.hm-total-col { background: #fff3e0 !important; }
 .hm-row-dimmed { opacity: 0.3; }
+
+/* ══ CARRY-FORWARD BANNER ═══════════════════════════════════ */
+.cf-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #1a2f1a;
+  border: 1px solid #2a5a2a;
+  border-left: 4px solid #2a8a4a;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: #b8e0c0;
+  animation: cfBannerFadeIn 0.4s ease;
+}
+@keyframes cfBannerFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cf-banner-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+.cf-banner-body { flex: 1; }
+.cf-banner-title {
+  font-weight: 600;
+  color: #4ace80;
+  margin-bottom: 0.2rem;
+}
+.cf-banner-detail { color: #8ac8a0; font-size: 0.8rem; }
+.cf-banner-close {
+  background: none;
+  border: none;
+  color: #4ace80;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+}
+.cf-banner-close:hover { opacity: 1; }
+
+/* Opening Balance auto-carry tag */
+.ob-auto-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #1a3a2a;
+  color: #4ace80;
+  border: 1px solid #2a6a3a;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  line-height: 1.4;
+}

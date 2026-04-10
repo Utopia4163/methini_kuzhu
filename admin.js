@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   contribModalInst = new bootstrap.Modal(document.getElementById('contribModal'));
   historyModalInst = new bootstrap.Modal(document.getElementById('historyModal'));
-  setupMonthYear();
+  populateYearDropdown();
   initAttCalendar();
 });
 
@@ -304,21 +304,21 @@ async function loadLogs() {
   }
 }
 
-/* 'dd/MM/yyyy' → [name, …]  — all members */
+/* 'dd/MM/yyyy' → [name, …]  — all members (excludes voided) */
 function _buildAttDayMap() {
   _attDayMap = {};
   allLogs.forEach(l => {
-    if (!l.date) return;
+    if (!l.date || l.status === 'Voided') return;
     if (!_attDayMap[l.date]) _attDayMap[l.date] = [];
     _attDayMap[l.date].push(l.name || '?');
   });
 }
 
-/* localid → Set<'dd/MM/yyyy'>  — per-member presence lookup */
+/* localid → Set<'dd/MM/yyyy'>  — per-member presence lookup (excludes voided) */
 function _buildMemberAttDates() {
   _memberAttDates = {};
   allLogs.forEach(l => {
-    if (!l.localid || !l.date) return;
+    if (!l.localid || !l.date || l.status === 'Voided') return;
     if (!_memberAttDates[l.localid]) _memberAttDates[l.localid] = new Set();
     _memberAttDates[l.localid].add(l.date);
   });
@@ -457,46 +457,79 @@ function _showAttDay(dateKey, skipScroll) {
   const cell = document.querySelector(`.att-day-cell[data-date="${dateKey}"]`);
   if (cell) cell.classList.add('att-selected');
 
-  const [d, m, y] = dateKey.split('/').map(Number);
-  const label = new Date(y, m - 1, d).toLocaleDateString('en-AU', {
+  const [dd, mm, yy] = dateKey.split('/').map(Number);
+  const label = new Date(yy, mm - 1, dd).toLocaleDateString('en-AU', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
   document.getElementById('att-detail-date').textContent = label;
 
+  // Use allLogs for both views so we have timestamps + localIds for void buttons.
+  // Exclude voided records from the main list.
+  const dayLogs = allLogs.filter(l =>
+    l.date === dateKey &&
+    l.status !== 'Voided' &&
+    (!_attSelected || l.localid === _attSelected)
+  );
+
   let bodyHtml = '';
 
   if (_attSelected) {
-    const logs = allLogs.filter(l => l.localid === _attSelected && l.date === dateKey);
+    // ── Individual member view ──────────────────────────────
     const memberName = allMembers.find(m => m.localId === _attSelected)?.name || 'Member';
-    const timeRows = logs.map(l => {
+    const timeRows = dayLogs.map(l => {
       const ts      = l.timestamp ? new Date(l.timestamp) : null;
-      const timeStr = ts
-        ? ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
-        : '–';
+      const timeStr = ts ? ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : '–';
+      const isAdm   = l.status === 'AdminMark';
       return `<div class="att-detail-row">
-        <i class="bi bi-clock" style="color:var(--blue);font-size:1rem;"></i>
-        <span>Checked in at <strong>${timeStr}</strong></span>
+        <i class="bi bi-${isAdm ? 'shield-check' : 'clock'}" style="color:var(--${isAdm ? 'orange' : 'blue'});font-size:1rem;"></i>
+        <span style="flex:1;">Checked in at <strong>${timeStr}</strong>${isAdm ? ' <span style="font-size:0.75em;color:var(--orange);">(admin)</span>' : ''}</span>
+        <button class="att-void-btn" onclick="voidAttendanceEntry('${escJs(l.timestamp)}','${escJs(l.localid)}','${dateKey}')">
+          <i class="bi bi-x-circle"></i> Void
+        </button>
       </div>`;
     }).join('');
     bodyHtml = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
-      ${memberName} — ${logs.length} record${logs.length !== 1 ? 's' : ''}
-    </div>${timeRows}`;
+      ${esc(memberName)} — ${dayLogs.length} record${dayLogs.length !== 1 ? 's' : ''}
+    </div>${timeRows || '<div style="font-size:0.85rem;color:var(--muted);padding:0.25rem 0;">No attendance recorded.</div>'}`;
+    // Mark attendance action
+    bodyHtml += `<div class="att-detail-actions">
+      <button class="att-mark-btn" onclick="adminMarkAttendanceEntry('${dateKey}','${escJs(_attSelected)}','${escJs(memberName)}')">
+        <i class="bi bi-plus-circle"></i> Mark Attendance
+      </button>
+    </div>`;
 
   } else {
-    const names = _attDayMap[dateKey] || [];
-    const countMap = {};
-    names.forEach(n => { countMap[n] = (countMap[n] || 0) + 1; });
-    const rows = Object.entries(countMap)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([n, cnt]) => `<div class="att-detail-row">
-        <i class="bi bi-person-check" style="color:var(--green);font-size:1rem;"></i>
-        <strong style="flex:1;">${esc(n)}</strong>
-        ${cnt > 1 ? `<span class="badge-neutral">${cnt}× recorded</span>` : ''}
-      </div>`).join('');
-    const uniq = Object.keys(countMap).length;
+    // ── All-members view ────────────────────────────────────
+    const rows = dayLogs.map(l => {
+      const ts      = l.timestamp ? new Date(l.timestamp) : null;
+      const timeStr = ts ? ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : '–';
+      const isAdm   = l.status === 'AdminMark';
+      return `<div class="att-detail-row">
+        <i class="bi bi-${isAdm ? 'shield-check' : 'person-check'}" style="color:var(--${isAdm ? 'orange' : 'green'});font-size:1rem;"></i>
+        <strong style="flex:1;">${esc(l.name)}</strong>
+        <span style="color:var(--muted);font-size:0.8em;margin-right:0.4rem;">${timeStr}</span>
+        <button class="att-void-btn" onclick="voidAttendanceEntry('${escJs(l.timestamp)}','${escJs(l.localid)}','${dateKey}')">
+          <i class="bi bi-x-circle"></i> Void
+        </button>
+      </div>`;
+    }).join('');
+    const uniq = new Set(dayLogs.map(l => l.localid)).size;
     bodyHtml = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">
-      ${names.length} record${names.length !== 1 ? 's' : ''} · ${uniq} unique member${uniq !== 1 ? 's' : ''}
-    </div>${rows}`;
+      ${dayLogs.length} record${dayLogs.length !== 1 ? 's' : ''} · ${uniq} unique member${uniq !== 1 ? 's' : ''}
+    </div>${rows || '<div style="font-size:0.85rem;color:var(--muted);padding:0.25rem 0;">No attendance recorded.</div>'}`;
+    // Mark attendance action — member dropdown
+    const memberOpts = allMembers
+      .map(m => `<option value="${esc(m.localId)}" data-name="${esc(m.name)}">${esc(m.name)}</option>`)
+      .join('');
+    bodyHtml += `<div class="att-detail-actions">
+      <select id="att-mark-member" class="att-mark-sel">
+        <option value="">Select member…</option>
+        ${memberOpts}
+      </select>
+      <button class="att-mark-btn" onclick="adminMarkAttendanceEntry('${dateKey}')">
+        <i class="bi bi-plus-circle"></i> Mark
+      </button>
+    </div>`;
   }
 
   document.getElementById('att-detail-body').innerHTML = bodyHtml;
@@ -509,6 +542,71 @@ function closeAttDetail() {
   _attSelectedDay = null;
   document.getElementById('att-detail-panel').style.display = 'none';
   document.querySelectorAll('.att-day-cell').forEach(el => el.classList.remove('att-selected'));
+}
+
+/* ── Admin: Void an attendance record ─────────────────────── */
+async function voidAttendanceEntry(timestamp, localId, dateKey) {
+  if (!confirm('Void this attendance record?\n\nIt will be removed from counts and the calendar, but kept in the sheet for audit.')) return;
+  try {
+    const data = await apiRead({ action: 'voidAttendance', timestamp, localId });
+    if (data.success) {
+      // Mark the entry as Voided in the local cache — no full reload needed
+      const entry = allLogs.find(l => l.timestamp === timestamp && l.localid === localId);
+      if (entry) entry.status = 'Voided';
+      _buildAttDayMap();
+      _buildMemberAttDates();
+      renderAttCalendar();
+      _showAttDay(dateKey, true);   // refresh panel without scroll
+      showToast('Attendance voided ✓');
+    } else {
+      showToast(data.error || 'Could not void record', 'error');
+    }
+  } catch {
+    showToast('Network error — please try again', 'error');
+  }
+}
+
+/* ── Admin: Mark attendance for a specific date ────────────── */
+async function adminMarkAttendanceEntry(dateKey, localId, memberName) {
+  // All-members view: localId + memberName come from the inline dropdown
+  if (!localId) {
+    const sel = document.getElementById('att-mark-member');
+    if (!sel || !sel.value) {
+      showToast('Please select a member first', 'error');
+      return;
+    }
+    localId    = sel.value;
+    memberName = sel.options[sel.selectedIndex]?.dataset?.name || sel.options[sel.selectedIndex]?.text || localId;
+  }
+  // Snapshot the button reference BEFORE any async op or DOM rebuild
+  const btn = document.querySelector('#att-detail-panel .att-mark-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+  try {
+    const data = await apiRead({ action: 'adminMarkAttendance', localId, name: memberName, date: dateKey });
+    if (data.success) {
+      // Add to local cache so the panel refreshes immediately without a round-trip
+      allLogs.push({
+        timestamp:  new Date().toISOString(),
+        localid:    localId,
+        name:       memberName,
+        instrument: '',
+        location:   'Admin Mark',
+        date:       dateKey,
+        status:     'AdminMark',
+      });
+      _buildAttDayMap();
+      _buildMemberAttDates();
+      renderAttCalendar();
+      _showAttDay(dateKey, true);  // rebuilds panel (btn ref is now stale — that's fine)
+      showToast(`Marked: ${memberName} ✓`);
+    } else {
+      showToast(data.error || 'Could not mark attendance', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-circle"></i> Mark'; }
+    }
+  } catch {
+    showToast('Network error — please try again', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-circle"></i> Mark'; }
+  }
 }
 
 /* ── Render heatmap (matrix view) ──────────────────────────── */
@@ -885,17 +983,21 @@ async function submitEditTags() {
 /* ════════════════════════════════════════════════════════════
    Contributions
    ════════════════════════════════════════════════════════════ */
-function setupMonthYear() {
-  const now  = new Date();
-  const ySel = document.getElementById('con-year');
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
+function populateYearDropdown() {
+  const now      = new Date();
+  const maxYear  = now.getFullYear();   // current year = highest selectable year
+  const minYear  = maxYear - 4;         // show 5 years of history
+  const ySel     = document.getElementById('con-year');
+  ySel.innerHTML = '';
+  for (let y = maxYear; y >= minYear; y--) {
     const o = new Option(y, y);
     ySel.add(o);
   }
+  ySel.value = maxYear;  // default to current year
 }
 
 async function loadContribs() {
-  const year = document.getElementById('con-year').value;
+  const year = parseInt(document.getElementById('con-year').value);
 
   document.getElementById('contrib-container').innerHTML =
     '<div class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>';
@@ -904,6 +1006,8 @@ async function loadContribs() {
     const data  = await apiRead({ action: 'getContributions', year });
     allContribs = data.contributions || [];
     renderContribs();
+    // After rendering, check if carry-forward is needed for this year
+    await checkAndCarryForward(year);
   } catch (e) {
     document.getElementById('contrib-container').innerHTML =
       `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
@@ -940,11 +1044,22 @@ function renderContribs() {
   const monthHeaders = MONTH_ABBR.map(mo => `<th title="${mo}">${mo}</th>`).join('');
 
   const rows = allMembers.map(m => {
-    const ob      = allContribsAll.find(c => String(c.memberId) === String(m.localId) && parseInt(c.month) === 0);
-    const obAmt   = ob ? (parseFloat(ob.amount) || 0) : 0;
-    const obLabel = ob ? `$${obAmt}` : '—';
-    const obCls   = ob ? '' : 'ob-empty';
-    const obDot   = (ob && ob.notes) ? '<span class="mc-dot"></span>' : '';
+    // Per-year OB: prefer explicit year match, fall back to legacy year=0
+    const ob      = allContribsAll.find(c =>
+                      String(c.memberId) === String(m.localId) &&
+                      parseInt(c.month) === 0 &&
+                      parseInt(c.year) === year
+                    ) || allContribsAll.find(c =>
+                      String(c.memberId) === String(m.localId) &&
+                      parseInt(c.month) === 0 &&
+                      parseInt(c.year) === 0
+                    );
+    const obAmt    = ob ? (parseFloat(ob.amount) || 0) : 0;
+    const obLabel  = ob ? `$${obAmt}` : '—';
+    const obCls    = ob ? '' : 'ob-empty';
+    const isAutoOB = ob && ob.notes && ob.notes.startsWith('[auto:');
+    const obDot    = (ob && ob.notes && !isAutoOB) ? '<span class="mc-dot"></span>' : '';
+    const autoTag  = isAutoOB ? '<span class="ob-auto-tag">auto</span>' : '';
 
     let monthlyPaid = 0;
     const monthCells = [1,2,3,4,5,6,7,8,9,10,11,12].map(mon => {
@@ -959,7 +1074,7 @@ function renderContribs() {
       const cls = isPaid ? 'mc-paid' : 'mc-unpaid';
       const lbl = `$${c.amount || 30}`;
       const dot = c.notes ? '<span class="mc-dot"></span>' : '';
-      const tip = isPaid ? `Paid $${c.amount || 30}` : `Unpaid $${c.amount || 30}`;
+      const tip = isPaid ? `Paid $${c.amount || 30}` : `Void $${c.amount || 30}`;
       return `<td><div class="mc ${cls}" title="${tip}${c.notes ? ' · ' + c.notes : ''}"
                   onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',${mon},${year})"
                   >${lbl}${dot}</div></td>`;
@@ -967,16 +1082,17 @@ function renderContribs() {
 
     const total    = obAmt + monthlyPaid;
     const totalCls = total > 0 ? 'cy-total' : 'cy-total cy-zero';
+    const obTip    = ob ? `Opening Balance ${year}${ob.notes ? ' · ' + ob.notes : ''}` : `Opening Balance ${year} — click to add`;
 
     return `<tr id="cr-${esc(m.localId)}">
       <td class="cy-name">
         ${esc(m.name)}
         ${m.email ? `<br><small style="color:var(--muted);font-weight:400;font-size:0.7rem;">${esc(m.email)}</small>` : ''}
       </td>
-      <td title="Opening Balance${ob && ob.notes ? ' · ' + ob.notes : ''}">
+      <td title="${esc(obTip)}">
         <button class="ob-btn ${obCls}"
-                onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',0,0)">
-          ${obLabel}${obDot}
+                onclick="openContribModal('${esc(m.localId)}','${esc(m.name)}',0,${year})">
+          ${obLabel}${obDot}${autoTag}
         </button>
       </td>
       ${monthCells}
@@ -1011,11 +1127,19 @@ function renderContribs() {
 
 function openContribModal(memberId, memberName, month, year) {
   const isOB = (parseInt(month) === 0);
+  const iYear = parseInt(year);
 
   let existing;
   if (isOB) {
+    // Per-year OB: prefer explicit year match, fall back to legacy year=0
     existing = allContribsAll.find(c =>
-      String(c.memberId) === String(memberId) && parseInt(c.month) === 0
+      String(c.memberId) === String(memberId) &&
+      parseInt(c.month) === 0 &&
+      parseInt(c.year) === iYear
+    ) || allContribsAll.find(c =>
+      String(c.memberId) === String(memberId) &&
+      parseInt(c.month) === 0 &&
+      parseInt(c.year) === 0
     );
   } else {
     existing = allContribs.find(c =>
@@ -1024,35 +1148,42 @@ function openContribModal(memberId, memberName, month, year) {
   }
 
   const hasRecord  = !!existing;
-  const initStatus = isOB ? 'Paid' : (hasRecord ? (existing.status || 'Unpaid') : 'Paid');
+  // Normalise legacy 'Unpaid' → 'Void'
+  const rawStatus  = hasRecord ? (existing.status || 'Void') : 'Paid';
+  const initStatus = isOB ? 'Paid' : (rawStatus === 'Unpaid' ? 'Void' : rawStatus);
 
-  cmState = { memberId, memberName, month: parseInt(month), year: parseInt(year), status: initStatus, isOB };
+  cmState = { memberId, memberName, month: parseInt(month), year: iYear, status: initStatus, isOB };
 
   if (isOB) {
-    document.getElementById('cm-title').textContent = `Opening Balance — ${memberName}`;
+    document.getElementById('cm-title').textContent = `Opening Balance ${iYear} — ${memberName}`;
   } else {
-    const mName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('en', { month: 'long' });
+    const mName = new Date(iYear, parseInt(month) - 1).toLocaleString('en', { month: 'long' });
     document.getElementById('cm-title').textContent = hasRecord
-      ? `Edit Payment — ${memberName} · ${mName} ${year}`
-      : `Record Payment — ${memberName} · ${mName} ${year}`;
+      ? `Edit Payment — ${memberName} · ${mName} ${iYear}`
+      : `Record Payment — ${memberName} · ${mName} ${iYear}`;
   }
 
   document.getElementById('cm-status-section').style.display = isOB ? 'none' : '';
+  // Void only makes sense when a record already exists — hide it for new entries
+  document.getElementById('cm-btn-unpaid').style.display = hasRecord ? '' : 'none';
 
   document.getElementById('cm-notes-label').innerHTML = isOB
-    ? 'NOTES <span style="font-weight:400;color:var(--muted);">(describe period covered, e.g. Jan–Jun 2023)</span>'
+    ? `NOTES <span style="font-weight:400;color:var(--muted);">(describe what this OB covers, e.g. balance from ${iYear - 1})</span>`
     : 'NOTES <span style="font-weight:400;color:var(--muted);">(payment method, ref, or months covered)</span>';
   document.getElementById('cm-notes').placeholder = isOB
-    ? 'e.g. Cash paid before system setup — covers Jan to Jun 2023'
+    ? `e.g. Carried forward from ${iYear - 1}`
     : 'e.g. Bank transfer ref #123, covers Feb + March';
 
   document.getElementById('cm-amount').previousElementSibling.innerHTML =
-    isOB ? 'OPENING BALANCE ($)' : 'AMOUNT RECEIVED ($)';
+    isOB ? `OPENING BALANCE ${iYear} ($)` : 'AMOUNT RECEIVED ($)';
   document.getElementById('cm-amount').nextElementSibling.textContent = isOB
-    ? 'Total amount paid before this system was set up. Use Notes to describe the period.'
+    ? `Opening balance for the ${iYear} year. Editing this will override the auto-calculated carry-forward.`
     : 'Default $30/month. Enter higher amount for catch-up payments (e.g. $60 for 2 months).';
 
-  document.getElementById('cm-notes').value  = hasRecord ? (existing.notes  || '') : '';
+  // Strip auto-carry flag from notes display so admin sees clean value
+  const rawNotes = hasRecord ? (existing.notes || '') : '';
+  const displayNotes = rawNotes.replace(/^\[auto:\d{4}\]\s*/, '');
+  document.getElementById('cm-notes').value  = displayNotes;
   document.getElementById('cm-amount').value = hasRecord ? (existing.amount || (isOB ? 0 : 30)) : (isOB ? 0 : 30);
 
   const name  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
@@ -1083,7 +1214,7 @@ function refreshCMButtons() {
   btnP.className   = `status-toggle-btn ${paid  ? 'btn btn-success' : 'btn btn-outline-secondary'}`;
   btnU.className   = `status-toggle-btn ${!paid ? 'btn btn-danger'  : 'btn btn-outline-secondary'}`;
   submit.className = `btn fw-bold ${paid ? 'btn-success' : 'btn-danger'}`;
-  submit.textContent = paid ? '✓ Mark as Paid' : '✗ Mark as Unpaid';
+  submit.textContent = paid ? '✓ Mark as Paid' : '✗ Mark as Void';
 }
 
 async function submitContribChange() {
@@ -1092,27 +1223,132 @@ async function submitContribChange() {
   const changedBy   = document.getElementById('cm-by').value.trim() || 'Admin';
   const amount      = parseFloat(document.getElementById('cm-amount').value) || 0;
   const finalStatus = isOB ? 'Paid' : status;
-  const finalYear   = isOB ? 0 : year;
+  // OB rows now use the actual year (not hardcoded 0) — Code.gs strips [auto:] prefix
+  const saveYear    = year;
 
   const btn      = document.getElementById('cm-submit');
   btn.disabled   = true;
   btn.textContent = 'Saving…';
 
-  apiWrite({
-    action: 'updateContribution',
-    memberId, memberName,
-    month,
-    year: finalYear,
-    amount, status: finalStatus, notes, changedBy
-  });
+  try {
+    const res = await apiRead({
+      action: 'updateContribution',
+      memberId, memberName,
+      month,
+      year: saveYear,
+      amount, status: finalStatus, notes, changedBy
+    });
 
-  await new Promise(r => setTimeout(r, 1300));
-  contribModalInst.hide();
-  await Promise.all([loadContribLog(), loadAllContribs()]);
-  await loadContribs();
+    if (!res.success) throw new Error(res.error || 'Save failed');
 
-  btn.disabled = false;
-  showToast(isOB ? `Opening balance saved for ${memberName} ✓` : `${memberName} — ${finalStatus} ✓`);
+    contribModalInst.hide();
+    await Promise.all([loadContribLog(), loadAllContribs()]);
+    await loadContribs();
+
+    showToast(isOB ? `Opening balance ${year} saved for ${memberName} ✓` : `${memberName} — ${finalStatus} ✓`);
+
+    // If a contribution was edited in a past year, reconcile carry-forwards in subsequent years
+    if (!isOB) {
+      reconcileSubsequentOBs(year);
+    }
+  } catch (e) {
+    showToast(`Save failed: ${e.message}`, 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = isOB ? (cmState.status === 'Paid' ? '✎ Update Opening Balance' : '✓ Save Opening Balance') : (cmState.status === 'Paid' ? '✓ Mark as Paid' : '✗ Mark as Void');
+  }
+}
+
+/* ── Carry-forward helpers ──────────────────────────────────── */
+
+/**
+ * Called after loadContribs(). If the selected year has NO OB rows for any
+ * member (i.e. it's a brand-new year), automatically trigger carry-forward
+ * from the prior year.  Skips if year has any data already.
+ */
+async function checkAndCarryForward(year) {
+  const currentYear = new Date().getFullYear();
+  // Only auto-carry for years that exist (past or current) and that have
+  // at least one prior year worth of data to carry from.
+  if (year <= 2020 || year > currentYear) return;
+
+  // Check if any OB rows already exist for this year
+  const hasOBForYear = allContribsAll.some(c =>
+    parseInt(c.month) === 0 && parseInt(c.year) === year
+  );
+  if (hasOBForYear) return;  // already set up — nothing to do
+
+  // Check if there's any data at all in the prior year
+  const priorYear = year - 1;
+  const hasPriorData = allContribsAll.some(c => parseInt(c.year) === priorYear || parseInt(c.year) === 0);
+  if (!hasPriorData) return;  // no prior data to carry from
+
+  try {
+    const res = await apiRead({ action: 'autoCarryForward', year: String(year), force: 'false' });
+    if (res.success && (res.carried > 0 || res.updated > 0)) {
+      // Reload allContribsAll to include the new OB rows
+      await loadAllContribs();
+      renderContribs();
+      showCarryForwardBanner(year, priorYear, res);
+    }
+  } catch (e) {
+    console.warn('checkAndCarryForward failed:', e);
+  }
+}
+
+/**
+ * After a contribution is edited in `fromYear`, cascade-reconcile the
+ * auto-flagged OBs in subsequent years up to the current year.
+ */
+async function reconcileSubsequentOBs(fromYear) {
+  const currentYear = new Date().getFullYear();
+  for (let y = fromYear + 1; y <= currentYear; y++) {
+    // Only reconcile years that have auto-carry OBs
+    const hasAutoOBs = allContribsAll.some(c =>
+      parseInt(c.month) === 0 &&
+      parseInt(c.year) === y &&
+      String(c.notes || '').startsWith('[auto:')
+    );
+    if (!hasAutoOBs) break; // no auto OBs in this year — stop cascading
+
+    try {
+      await apiRead({ action: 'autoCarryForward', year: String(y), force: 'true' });
+    } catch (e) {
+      console.warn(`reconcileSubsequentOBs failed for year ${y}:`, e);
+      break;
+    }
+  }
+
+  // Reload to pick up reconciled values
+  await Promise.all([loadAllContribs(), loadContribLog()]);
+  const selectedYear = parseInt(document.getElementById('con-year').value);
+  if (selectedYear > fromYear) renderContribs();
+}
+
+/**
+ * Show the green informational banner when carry-forward completes.
+ */
+function showCarryForwardBanner(toYear, fromYear, res) {
+  const banner = document.getElementById('carry-forward-banner');
+  if (!banner) return;
+
+  const count = (res.carried || 0) + (res.updated || 0);
+  banner.innerHTML = `
+    <div class="cf-banner">
+      <span class="cf-banner-icon">✅</span>
+      <div class="cf-banner-body">
+        <div class="cf-banner-title">Opening Balances carried forward to ${toYear}</div>
+        <div class="cf-banner-detail">
+          ${count} member${count !== 1 ? 's' : ''} had their end-of-${fromYear} balance
+          automatically carried forward as the ${toYear} Opening Balance.
+          ${res.skipped > 0 ? `${res.skipped} manually-set balance${res.skipped !== 1 ? 's' : ''} were preserved.` : ''}
+          You can click any <span class="ob-auto-tag" style="font-size:0.65rem;">auto</span> badge
+          to review or override a specific balance.
+        </div>
+      </div>
+      <button class="cf-banner-close" onclick="document.getElementById('carry-forward-banner').style.display='none';" aria-label="Dismiss">✕</button>
+    </div>`;
+  banner.style.display = '';
 }
 
 /* ── History modal ─────────────────────────────────────────── */
@@ -1126,13 +1362,14 @@ function showHistory(memberId, memberName) {
       if (parseInt(a.year) !== parseInt(b.year)) return parseInt(b.year) - parseInt(a.year);
       return parseInt(b.month) - parseInt(a.month);
     });
-  const currentOB = allContribsAll.find(c =>
+  // Collect all OB rows for this member (one per year)
+  const currentOBs = allContribsAll.filter(c =>
     String(c.memberId) === String(memberId) && parseInt(c.month) === 0
-  );
+  ).sort((a, b) => parseInt(b.year) - parseInt(a.year));
 
   let section1Html = '';
-  if (currentRecords.length || currentOB) {
-    const allCurrent = [...(currentOB ? [currentOB] : []), ...currentRecords];
+  if (currentRecords.length || currentOBs.length) {
+    const allCurrent = [...currentOBs, ...currentRecords];
     section1Html = `
       <h6 class="fw-semibold mb-2" style="color:var(--accent);">Current Payment Records</h6>
       <div class="table-responsive mb-3">
@@ -1143,16 +1380,20 @@ function showHistory(memberId, memberName) {
           <tbody>
             ${allCurrent.map(c => {
               const isOBRec = parseInt(c.month) === 0;
-              const mLabel = isOBRec
-                ? '<span style="color:#1a4a8a;font-weight:600;">Opening Balance</span>'
+              const obYear  = isOBRec ? (parseInt(c.year) || 'Legacy') : '';
+              const mLabel  = isOBRec
+                ? `<span style="color:#1a4a8a;font-weight:600;">Opening Balance ${obYear}</span>`
                 : new Date(parseInt(c.year), parseInt(c.month) - 1)
                     .toLocaleString('en', { month: 'short' }) + ' ' + c.year;
-              const notesHtml = c.notes
-                ? `<span style="color:#333;">${esc(c.notes)}</span>`
-                : '<span class="text-muted">—</span>';
+              const rawNotes    = c.notes || '';
+              const displayNote = rawNotes.replace(/^\[auto:\d{4}\]\s*/, '');
+              const isAuto      = rawNotes.startsWith('[auto:');
+              const notesHtml   = displayNote
+                ? `<span style="color:#333;">${esc(displayNote)}${isAuto ? ' <span class="ob-auto-tag">auto</span>' : ''}</span>`
+                : (isAuto ? '<span class="ob-auto-tag">auto</span>' : '<span class="text-muted">—</span>');
               return `<tr>
                 <td>${mLabel}</td>
-                <td><span class="${c.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(c.status)}</span></td>
+                <td><span class="${c.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${c.status === 'Paid' ? 'Paid' : 'Void'}</span></td>
                 <td>$${c.amount || 0}</td>
                 <td>${notesHtml}</td>
                 <td style="white-space:nowrap;">${fmtTs(c.lastUpdated)}</td>
@@ -1187,7 +1428,7 @@ function showHistory(memberId, memberName) {
               return `<tr>
                 <td style="white-space:nowrap;">${fmtTs(e.timestamp)}</td>
                 <td>${mLabel}</td>
-                <td><span class="${e.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${esc(e.status)}</span></td>
+                <td><span class="${e.status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}">${e.status === 'Paid' ? 'Paid' : 'Void'}</span></td>
                 <td>$${e.amount || 0}</td>
                 <td>${notesHtml}</td>
                 <td>${esc(e.changedBy || 'Admin')}</td>
@@ -1227,6 +1468,10 @@ function updateTopStats() {
    ════════════════════════════════════════════════════════════ */
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+/* Escape for use inside onclick='…' single-quoted JS string literals */
+function escJs(s) {
+  return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function fmtTs(ts) {
