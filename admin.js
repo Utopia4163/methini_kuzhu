@@ -9,6 +9,7 @@ let allMembers     = [];
 let allContribs    = [];    // current year view
 let allContribsAll = [];   // all months (for member payment totals)
 let allContribLog  = [];   // full immutable audit trail
+let allExpenses    = [];   // current year expenses
 
 /* ── Modal instances & contribution-change state ── */
 let contribModalInst = null;
@@ -75,11 +76,12 @@ async function loadContribLog() {
 
 /* ── Tabs ── */
 function switchTab(id) {
-  ['att','mem','con','set'].forEach(t => {
+  ['att','mem','con','exp','set'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t === id);
     document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
   });
   if (id === 'set') loadSettingsTab();
+  if (id === 'exp') loadExpenses();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1432,8 +1434,8 @@ async function generateInviteLink() {
     const res = await apiRead({ action: 'generateInvite', createdBy });
     if (!res.success) { showToast(res.error || 'Could not generate invite', 'error'); return; }
 
-    const base = window.location.origin + window.location.pathname;
-    const link = `${base}?invite=${res.token}`;
+    const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, 'invite.html');
+    const link = `${base}?token=${res.token}`;
     document.getElementById('invite-link-input').value = link;
 
     const exp = new Date(res.expiresAt);
@@ -1509,4 +1511,393 @@ async function revokeInviteToken(token) {
     if (res.success) { showToast('Invite revoked ✓'); loadInviteList(); }
     else showToast(res.error || 'Could not revoke', 'error');
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Expenses
+   ════════════════════════════════════════════════════════════ */
+
+const EXP_CATEGORIES = [
+  'Venue',
+  'Instruments & Equipment',
+  'Materials & Props',
+  'Food & Refreshments',
+  'Travel',
+  'Marketing & Printing',
+  'Other',
+];
+
+// Category → colour class (reuse role-tag palette)
+const EXP_CAT_COLOR = {
+  'Venue':                    'role-tag-p0',
+  'Instruments & Equipment':  'role-tag-p1',
+  'Materials & Props':        'role-tag-p2',
+  'Food & Refreshments':      'role-tag-p3',
+  'Travel':                   'role-tag-p4',
+  'Marketing & Printing':     'role-tag-p5',
+  'Other':                    'role-tag-p6',
+};
+
+/* ── Year selector (mirrors contribution year dropdown) ── */
+function populateExpYearDropdown() {
+  const now     = new Date().getFullYear();
+  const ySel    = document.getElementById('exp-year');
+  const stmtSel = document.getElementById('stmt-year');
+  [ySel, stmtSel].forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (let y = now; y >= now - 4; y--) sel.add(new Option(y, y));
+    sel.value = now;
+  });
+}
+
+/* ── Load ── */
+async function loadExpenses() {
+  if (!document.getElementById('exp-year').options.length) populateExpYearDropdown();
+  const year = parseInt(document.getElementById('exp-year').value);
+  document.getElementById('exp-body').innerHTML =
+    '<tr><td colspan="8" class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</td></tr>';
+  try {
+    const data = await apiRead({ action: 'getExpenses', year });
+    allExpenses = data.expenses || [];
+    renderExpenses();
+  } catch (e) {
+    document.getElementById('exp-body').innerHTML =
+      `<tr><td colspan="8" class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</td></tr>`;
+  }
+}
+
+/* ── Render ── */
+function renderExpenses() {
+  const filterCat = document.getElementById('exp-filter-cat').value;
+  const rows = filterCat
+    ? allExpenses.filter(e => e.category === filterCat)
+    : allExpenses;
+
+  const total = rows.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+  // Update summary strip
+  const strip = document.getElementById('exp-summary-strip');
+  strip.style.display = '';
+  document.getElementById('exp-strip-count').textContent = rows.length;
+  document.getElementById('exp-strip-total').textContent = '$' + total.toFixed(2);
+
+  if (!rows.length) {
+    document.getElementById('exp-body').innerHTML =
+      '<tr><td colspan="8" class="text-center py-4 text-muted">No expenses recorded for this period.</td></tr>';
+    return;
+  }
+
+  document.getElementById('exp-body').innerHTML = rows.map(e => {
+    const catCls = EXP_CAT_COLOR[e.category] || 'role-tag-p6';
+    const dateLabel = e.date
+      ? new Date(e.date + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })
+      : '—';
+    return `<tr>
+      <td style="white-space:nowrap;">${dateLabel}</td>
+      <td><span class="role-tag ${catCls}" style="font-size:0.73rem;">${esc(e.category)}</span></td>
+      <td>${esc(e.description)}</td>
+      <td style="white-space:nowrap;font-weight:600;">$${parseFloat(e.amount).toFixed(2)}</td>
+      <td style="color:var(--muted);">${esc(e.paidTo || '—')}</td>
+      <td style="color:var(--muted);font-size:0.82rem;">${esc(e.notes || '')}</td>
+      <td style="color:var(--muted);font-size:0.78rem;">${esc(e.recordedBy || '—')}</td>
+      <td>
+        <button class="contrib-history-btn" title="Edit"
+                onclick="openExpenseModal('${escJs(e.expenseId)}')">
+          <i class="bi bi-pencil"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Modal helpers ── */
+let expenseModalInst  = null;
+let statementModalInst = null;
+
+function _getExpenseModal() {
+  if (!expenseModalInst)
+    expenseModalInst = new bootstrap.Modal(document.getElementById('expenseModal'));
+  return expenseModalInst;
+}
+function _getStatementModal() {
+  if (!statementModalInst)
+    statementModalInst = new bootstrap.Modal(document.getElementById('statementModal'));
+  return statementModalInst;
+}
+
+/* ── Open Add / Edit modal ── */
+function openExpenseModal(expenseId) {
+  const isEdit   = !!expenseId;
+  const existing = isEdit ? allExpenses.find(e => e.expenseId === expenseId) : null;
+
+  document.getElementById('exp-modal-title').innerHTML =
+    `<i class="bi bi-receipt me-2"></i>${isEdit ? 'Edit Expense' : 'Add Expense'}`;
+  document.getElementById('exp-id').value          = existing?.expenseId || '';
+  document.getElementById('exp-date').value        = existing?.date || new Date().toISOString().slice(0, 10);
+  document.getElementById('exp-amount').value      = existing?.amount || '';
+  document.getElementById('exp-category').value    = existing?.category || 'Venue';
+  document.getElementById('exp-description').value = existing?.description || '';
+  document.getElementById('exp-paidto').value      = existing?.paidTo || '';
+  document.getElementById('exp-notes').value       = existing?.notes || '';
+
+  // Delete button: visible only when editing
+  document.getElementById('exp-delete-btn').style.display = isEdit ? '' : 'none';
+
+  const btn = document.getElementById('exp-save-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Save';
+
+  _getExpenseModal().show();
+}
+
+/* ── Confirm delete ── */
+async function confirmDeleteExpense() {
+  const id = document.getElementById('exp-id').value;
+  const ex = allExpenses.find(e => e.expenseId === id);
+  if (!ex) return;
+  if (!confirm(`Delete expense "${ex.description}" ($${parseFloat(ex.amount).toFixed(2)})?\n\nThis cannot be undone.`)) return;
+  try {
+    const res = await apiRead({ action: 'deleteExpense', expenseId: id });
+    if (res.success) {
+      _getExpenseModal().hide();
+      showToast('Expense deleted ✓');
+      await loadExpenses();
+    } else {
+      showToast(res.error || 'Could not delete', 'error');
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+/* ── Submit (add or update) ── */
+async function submitExpense() {
+  const id          = document.getElementById('exp-id').value;
+  const date        = document.getElementById('exp-date').value;
+  const amount      = document.getElementById('exp-amount').value;
+  const category    = document.getElementById('exp-category').value;
+  const description = document.getElementById('exp-description').value.trim();
+  const paidTo      = document.getElementById('exp-paidto').value.trim();
+  const notes       = document.getElementById('exp-notes').value.trim();
+
+  if (!date || !description || !amount) {
+    showToast('Date, description, and amount are required.', 'error'); return;
+  }
+  if (parseFloat(amount) <= 0) {
+    showToast('Amount must be greater than zero.', 'error'); return;
+  }
+
+  const btn = document.getElementById('exp-save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="pk-spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.2);display:inline-block;vertical-align:middle;margin-right:6px;"></span>Saving…';
+
+  try {
+    const isEdit   = !!id;
+    const session  = getSession();
+    const params   = {
+      action:      isEdit ? 'updateExpense' : 'addExpense',
+      expenseId:   id,
+      date, category, description, amount,
+      paidTo, notes,
+      recordedBy:  session?.email || 'Admin',
+    };
+    const res = await apiRead(params);
+    if (res.success) {
+      _getExpenseModal().hide();
+      showToast(isEdit ? 'Expense updated ✓' : 'Expense added ✓');
+      await loadExpenses();
+    } else {
+      showToast(res.error || 'Could not save expense.', 'error');
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Save';
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Statement / Reconciliation Report
+   ════════════════════════════════════════════════════════════ */
+
+async function showStatement() {
+  if (!document.getElementById('stmt-year').options.length) populateExpYearDropdown();
+  // Sync statement year to expenses panel year
+  const expYear = document.getElementById('exp-year').value;
+  document.getElementById('stmt-year').value = expYear;
+  _getStatementModal().show();
+  await renderStatement();
+}
+
+async function renderStatement() {
+  const year    = parseInt(document.getElementById('stmt-year').value);
+  const body    = document.getElementById('stmt-body');
+  body.innerHTML = '<div class="text-center py-4 text-muted"><span class="pk-spinner"></span>&nbsp; Building statement…</div>';
+
+  try {
+    // Fetch fresh data for the selected year
+    const [contribData, expData] = await Promise.all([
+      apiRead({ action: 'getContributions', year }),
+      apiRead({ action: 'getExpenses', year }),
+    ]);
+
+    const contribs  = contribData.contributions || [];
+    const expenses  = expData.expenses           || [];
+
+    // ── Income calculations ───────────────────────────────
+    let openingTotal = 0;
+    const monthIncome = new Array(13).fill(0); // index 1–12
+
+    contribs.forEach(c => {
+      const m   = parseInt(c.month);
+      const amt = parseFloat(c.amount) || 0;
+      if (m === 0 && c.status !== 'Void') {
+        openingTotal += amt;
+      } else if (m >= 1 && m <= 12 && c.status === 'Paid') {
+        monthIncome[m] += amt;
+      }
+    });
+
+    const totalContributions = monthIncome.reduce((s, v) => s + v, 0);
+    const totalIncome        = openingTotal + totalContributions;
+
+    // ── Expense calculations ──────────────────────────────
+    const monthExpense = new Array(13).fill(0);
+    expenses.forEach(e => {
+      const m = parseInt((e.date || '').slice(5, 7));
+      if (m >= 1 && m <= 12) monthExpense[m] += parseFloat(e.amount) || 0;
+    });
+    const totalExpenses = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    const netBalance    = totalIncome - totalExpenses;
+
+    // ── Expense by category breakdown ────────────────────
+    const catMap = {};
+    expenses.forEach(e => {
+      const cat = e.category || 'Other';
+      catMap[cat] = (catMap[cat] || 0) + (parseFloat(e.amount) || 0);
+    });
+    const catRows = Object.entries(catMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, amt]) => `<tr>
+        <td><span class="role-tag ${EXP_CAT_COLOR[cat] || 'role-tag-p6'}" style="font-size:0.73rem;">${esc(cat)}</span></td>
+        <td class="text-end" style="font-weight:600;">$${amt.toFixed(2)}</td>
+      </tr>`).join('');
+
+    // ── Monthly breakdown table ───────────────────────────
+    const monthRows = MONTH_ABBR.map((mo, idx) => {
+      const m      = idx + 1;
+      const inc    = monthIncome[m];
+      const exp    = monthExpense[m];
+      const net    = inc - exp;
+      const netCls = net >= 0 ? 'color:#1a7a3c;font-weight:700;' : 'color:#b03020;font-weight:700;';
+      if (inc === 0 && exp === 0) return `<tr style="color:var(--muted);">
+        <td>${mo}</td><td class="text-end">—</td><td class="text-end">—</td>
+        <td class="text-end" style="color:var(--muted);">—</td>
+      </tr>`;
+      return `<tr>
+        <td>${mo}</td>
+        <td class="text-end">${inc > 0 ? '$' + inc.toFixed(2) : '—'}</td>
+        <td class="text-end">${exp > 0 ? '$' + exp.toFixed(2) : '—'}</td>
+        <td class="text-end" style="${netCls}">${net >= 0 ? '+' : ''}$${net.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+
+    // ── Expense detail table ──────────────────────────────
+    const expRows = expenses.length
+      ? expenses.map(e => {
+          const catCls   = EXP_CAT_COLOR[e.category] || 'role-tag-p6';
+          const dateLabel = e.date
+            ? new Date(e.date + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' })
+            : '—';
+          return `<tr>
+            <td style="white-space:nowrap;">${dateLabel}</td>
+            <td><span class="role-tag ${catCls}" style="font-size:0.72rem;">${esc(e.category)}</span></td>
+            <td>${esc(e.description)}${e.paidTo ? `<br><small style="color:var(--muted);">${esc(e.paidTo)}</small>` : ''}</td>
+            <td class="text-end" style="font-weight:600;white-space:nowrap;">$${parseFloat(e.amount).toFixed(2)}</td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="4" class="text-center text-muted py-2">No expenses recorded.</td></tr>';
+
+    const netStyle = netBalance >= 0
+      ? 'background:#d5f5e3;color:#1a7a3c;border:1px solid #a9dfbf;'
+      : 'background:#fde8e8;color:#b03020;border:1px solid #f5b7b1;';
+
+    body.innerHTML = `
+      <!-- Summary cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-4">
+          <div class="stat-card green" style="text-align:center;padding:1rem;">
+            <div class="stat-val" style="font-size:1.5rem;">$${totalIncome.toFixed(2)}</div>
+            <div class="stat-label">Total Income</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:0.25rem;">OB $${openingTotal.toFixed(2)} + Contributions $${totalContributions.toFixed(2)}</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card" style="text-align:center;padding:1rem;">
+            <div class="stat-val" style="font-size:1.5rem;">$${totalExpenses.toFixed(2)}</div>
+            <div class="stat-label">Total Expenses</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:0.25rem;">${expenses.length} item${expenses.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card" style="${netStyle}text-align:center;padding:1rem;border-left-width:4px;">
+            <div class="stat-val" style="font-size:1.5rem;">${netBalance >= 0 ? '+' : ''}$${netBalance.toFixed(2)}</div>
+            <div class="stat-label">Net Balance</div>
+            <div style="font-size:0.72rem;margin-top:0.25rem;">${netBalance >= 0 ? 'Surplus' : 'Deficit'} for ${year}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly breakdown -->
+      <h6 class="fw-bold mb-2" style="font-size:0.9rem;color:var(--text);">Monthly Breakdown</h6>
+      <div class="pk-table-wrap mb-4">
+        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+          <thead><tr>
+            <th>Month</th>
+            <th class="text-end">Income</th>
+            <th class="text-end">Expenses</th>
+            <th class="text-end">Net</th>
+          </tr></thead>
+          <tbody>${monthRows}</tbody>
+          <tfoot style="font-weight:700;background:#f8f0e8;">
+            <tr>
+              <td>Total</td>
+              <td class="text-end">$${totalIncome.toFixed(2)}</td>
+              <td class="text-end">$${totalExpenses.toFixed(2)}</td>
+              <td class="text-end" style="${netBalance >= 0 ? 'color:#1a7a3c;' : 'color:#b03020;'}">
+                ${netBalance >= 0 ? '+' : ''}$${netBalance.toFixed(2)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Expenses by category -->
+      ${catRows ? `
+      <h6 class="fw-bold mb-2" style="font-size:0.9rem;color:var(--text);">Expenses by Category</h6>
+      <div class="pk-table-wrap mb-4" style="max-width:360px;">
+        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+          <thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>${catRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      <!-- Expense detail -->
+      <h6 class="fw-bold mb-2" style="font-size:0.9rem;color:var(--text);">Expense Detail — ${year}</h6>
+      <div class="pk-table-wrap">
+        <table class="table table-sm mb-0" style="font-size:0.83rem;">
+          <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>${expRows}</tbody>
+          ${expenses.length ? `<tfoot style="font-weight:700;background:#f8f0e8;">
+            <tr><td colspan="3" class="text-end">Total</td>
+            <td class="text-end">$${totalExpenses.toFixed(2)}</td></tr>
+          </tfoot>` : ''}
+        </table>
+      </div>`;
+
+  } catch (e) {
+    body.innerHTML = `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
+  }
 }

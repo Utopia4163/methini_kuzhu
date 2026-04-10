@@ -2,8 +2,8 @@
    auth.js — Medhini Parai Kuzhu
    ─────────────────────────────────────────────────────────
    Owns:
-     • SCRIPT_URL constant  (replaces the one in admin.js)
-     • apiRead / apiWrite   (moved here from admin.js)
+     • WORKER_URL / AUTH_API_KEY config
+     • apiRead / apiWrite   (Cloudflare Worker proxy)
      • PBKDF2 key derivation
      • Session management   (sessionStorage-based)
      • Login / Logout / Signup / Change-password flows
@@ -11,47 +11,15 @@
    ════════════════════════════════════════════════════════════ */
 
 // ─── 🔧 CONFIGURE ────────────────────────────────────────────
-//
-//  Phase 1/2 (direct Apps Script, JSONP):
-//    Set USE_WORKER = false
-//    Set SCRIPT_URL to your Apps Script web app URL
-//
-//  Phase 3 (Cloudflare Worker):
-//    Set USE_WORKER = true
-//    Set WORKER_URL to your Cloudflare Worker URL
-//    Set AUTH_API_KEY to the X-API-Key secret you set in the Worker
-//    SCRIPT_URL is only used by the Worker internally — remove it from here
-//
-const USE_WORKER  = true;                        // ← flip to true after deploying worker.js
-const SCRIPT_URL  = 'YOUR_APPS_SCRIPT_WEB_APP_URL';   // ← Phase 1/2: replace with GAS URL
-const WORKER_URL  = 'https://medhinikuzhu.utopia4163.workers.dev/';     // ← Phase 3: replace with Worker URL
-const AUTH_API_KEY = 'm61i(fi2wu2p965^6vlv!%#lnf6d)tj+^8g5wd7k8p6ombe*$4';            // ← Phase 3: must match Worker env var
+const WORKER_URL   = 'https://medhinikuzhu.utopia4163.workers.dev/';
+const AUTH_API_KEY = 'm61i(fi2wu2p965^6vlv!%#lnf6d)tj+^8g5wd7k8p6ombe*$4'; // must match Worker env var
 // ─────────────────────────────────────────────────────────────
 
 /* ════════════════════════════════════════════════════════════
-   API helpers
-   ─────────────────────────────────────────────────────────
-   USE_WORKER = false → JSONP (Apps Script direct, no CORS)
-   USE_WORKER = true  → fetch POST with X-API-Key (Worker proxy)
+   API helpers  (Cloudflare Worker — fetch POST with X-API-Key)
    ════════════════════════════════════════════════════════════ */
 
 function apiRead(params, timeoutMs = 12000) {
-  if (USE_WORKER) return _apiFetch(params, timeoutMs);
-  return _apiJsonp(params, timeoutMs);
-}
-
-// apiWrite is kept for backward compatibility but routes through Worker when enabled
-function apiWrite(params) {
-  if (USE_WORKER) {
-    _apiFetch(params).catch(() => {});
-    return;
-  }
-  const url = `${SCRIPT_URL}?${new URLSearchParams(params)}`;
-  fetch(url, { mode: 'no-cors' }).catch(() => {});
-}
-
-// ── Phase 3: fetch POST via Cloudflare Worker ────────────────
-function _apiFetch(params, timeoutMs = 12000) {
   const controller = new AbortController();
   const timer      = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(WORKER_URL, {
@@ -69,35 +37,8 @@ function _apiFetch(params, timeoutMs = 12000) {
     });
 }
 
-// ── Phase 1/2: JSONP (Apps Script direct) ───────────────────
-function _apiJsonp(params, timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    const cb  = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
-    const url = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
-    const el  = document.createElement('script');
-    let timer;
-
-    window[cb] = (data) => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      resolve(data);
-    };
-    el.onerror = () => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      reject(new Error('Network error — could not reach server.'));
-    };
-    timer = setTimeout(() => {
-      el.remove();
-      delete window[cb];
-      reject(new Error('Request timed out. Check your internet connection.'));
-    }, timeoutMs);
-
-    el.src = url;
-    document.head.appendChild(el);
-  });
+function apiWrite(params) {
+  apiRead(params).catch(() => {});
 }
 
 /* ════════════════════════════════════════════════════════════

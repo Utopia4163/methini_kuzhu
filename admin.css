@@ -989,3 +989,23 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ══ EXPENSES ═══════════════════════════════════════════════ */
+
+/* Summary strip — sits between filter bar and table */
+#exp-summary-strip {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 0.7rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+
+/* ══ STATEMENT PRINT STYLES ═══════════════════════════════ */
+@media print {
+  .pk-navbar, .pk-tabs, .filter-bar, .modal-footer,
+  #exp-summary-strip, .btn-close, .pk-toast { display: none !important; }
+  .modal-dialog  { max-width: 100% !important; margin: 0 !important; }
+  .modal-content { border: none !important; box-shadow: none !important; }
+  .pk-table-wrap { box-shadow: none !important; }
+}

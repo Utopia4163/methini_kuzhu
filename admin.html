@@ -122,6 +122,9 @@
       <button class="pk-tab" id="tab-con" onclick="switchTab('con')">
         <i class="bi bi-cash-stack"></i> Contributions
       </button>
+      <button class="pk-tab" id="tab-exp" onclick="switchTab('exp')">
+        <i class="bi bi-receipt"></i> Expenses
+      </button>
       <button class="pk-tab" id="tab-set" onclick="switchTab('set')">
         <i class="bi bi-shield-lock"></i> Admin
       </button>
@@ -343,6 +346,65 @@
 
     </div><!-- /panel-set -->
 
+    <!-- ── Expenses Panel ── -->
+    <div id="panel-exp" style="display:none;">
+
+      <div class="filter-bar">
+        <label style="font-size:0.85rem;color:var(--muted);margin:0;white-space:nowrap;">Year:</label>
+        <select class="form-select form-select-sm" id="exp-year" style="max-width:100px;" onchange="loadExpenses()"></select>
+        <select class="form-select form-select-sm" id="exp-filter-cat" style="max-width:160px;" onchange="renderExpenses()">
+          <option value="">All Categories</option>
+          <option>Venue</option>
+          <option>Instruments &amp; Equipment</option>
+          <option>Materials &amp; Props</option>
+          <option>Food &amp; Refreshments</option>
+          <option>Travel</option>
+          <option>Marketing &amp; Printing</option>
+          <option>Other</option>
+        </select>
+        <div style="margin-left:auto;display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button class="pk-refresh-btn" onclick="showStatement()" style="background:#2980b9;">
+            <i class="bi bi-file-earmark-bar-graph"></i> Statement
+          </button>
+          <button class="pk-refresh-btn" onclick="openExpenseModal()" style="background:var(--green);">
+            <i class="bi bi-plus-lg"></i> Add Expense
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary strip -->
+      <div id="exp-summary-strip" style="display:none;background:var(--surface);border-radius:14px;padding:0.9rem 1.25rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;box-shadow:0 1px 6px rgba(0,0,0,0.05);">
+        <span style="font-size:0.85rem;color:var(--muted);">
+          <strong id="exp-strip-count" style="color:var(--text);">0</strong> expenses &nbsp;·&nbsp;
+          Total: <strong id="exp-strip-total" style="color:var(--red);">$0</strong>
+        </span>
+      </div>
+
+      <div class="pk-table-wrap">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Paid To</th>
+                <th>Notes</th>
+                <th>Recorded By</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="exp-body">
+              <tr><td colspan="8" class="text-center py-4 text-muted">
+                <span class="pk-spinner"></span>&nbsp; Loading…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /panel-exp -->
+
   </div><!-- /pk-content -->
 </div><!-- /admin-panel -->
 
@@ -502,6 +564,124 @@
       </div>
       <div class="modal-body px-3 pb-4" id="hm-body">
         <div class="text-center py-3 text-muted"><span class="pk-spinner"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT EXPENSE MODAL ══════════════════════════════ -->
+<div class="modal fade ck-modal" id="expenseModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold" id="exp-modal-title">
+          <i class="bi bi-receipt me-2"></i>Add Expense
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <input type="hidden" id="exp-id">
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-date">
+              DATE <span style="color:#c0392b">*</span>
+            </label>
+            <input type="date" class="form-control" id="exp-date" style="border-radius:10px;">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-amount">
+              AMOUNT ($) <span style="color:#c0392b">*</span>
+            </label>
+            <input type="number" class="form-control" id="exp-amount"
+                   min="0.01" step="0.01" placeholder="0.00" style="border-radius:10px;">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-category">
+            CATEGORY <span style="color:#c0392b">*</span>
+          </label>
+          <select class="form-select" id="exp-category" style="border-radius:10px;">
+            <option value="Venue">Venue</option>
+            <option value="Instruments &amp; Equipment">Instruments &amp; Equipment</option>
+            <option value="Materials &amp; Props">Materials &amp; Props</option>
+            <option value="Food &amp; Refreshments">Food &amp; Refreshments</option>
+            <option value="Travel">Travel</option>
+            <option value="Marketing &amp; Printing">Marketing &amp; Printing</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-description">
+            DESCRIPTION <span style="color:#c0392b">*</span>
+          </label>
+          <input type="text" class="form-control" id="exp-description"
+                 placeholder="e.g. Hall rental – January session" style="border-radius:10px;" autocomplete="off">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-paidto">
+            PAID TO
+          </label>
+          <input type="text" class="form-control" id="exp-paidto"
+                 placeholder="e.g. Community Hall, John Smith" style="border-radius:10px;" autocomplete="off">
+        </div>
+
+        <div class="mb-1">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="exp-notes">
+            NOTES
+          </label>
+          <textarea class="form-control" id="exp-notes" rows="2"
+                    placeholder="Optional — receipt reference, split details, etc."
+                    style="border-radius:10px;font-size:0.9rem;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer px-4 pb-4 pt-3 d-flex justify-content-between">
+        <div>
+          <button class="btn btn-outline-danger btn-sm" id="exp-delete-btn"
+                  onclick="confirmDeleteExpense()" style="display:none;border-radius:8px;">
+            <i class="bi bi-trash3"></i> Delete
+          </button>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Cancel</button>
+          <button class="btn btn-success fw-bold" id="exp-save-btn" onclick="submitExpense()"
+                  style="border-radius:10px;min-width:110px;">
+            <i class="bi bi-check2 me-1"></i>Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STATEMENT MODAL ════════════════════════════════════════ -->
+<div class="modal fade ck-modal" id="statementModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-file-earmark-bar-graph me-2"></i>
+          Financial Statement
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+          <label class="fw-semibold text-muted" style="font-size:0.85rem;margin:0;">Year:</label>
+          <select class="form-select form-select-sm" id="stmt-year" style="max-width:100px;" onchange="renderStatement()"></select>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="window.print()" style="border-radius:8px;">
+            <i class="bi bi-printer me-1"></i>Print
+          </button>
+        </div>
+        <div id="stmt-body">
+          <div class="text-center py-4 text-muted"><span class="pk-spinner"></span></div>
+        </div>
+      </div>
+      <div class="modal-footer px-4 pb-4 pt-3">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Close</button>
       </div>
     </div>
   </div>
