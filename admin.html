@@ -20,34 +20,36 @@
 
     <!-- Normal login -->
     <div id="login-form">
-      <input type="text"     class="login-input" id="admin-name-login"
-             placeholder="Your name" autocomplete="name" style="margin-bottom:0.5rem;">
       <input type="email"    class="login-input" id="admin-email-login"
-             placeholder="Your email" autocomplete="email" style="margin-bottom:0.5rem;">
+             placeholder="Email address" autocomplete="email" style="margin-bottom:0.5rem;"
+             onkeyup="if(event.key==='Enter') document.getElementById('admin-pw').focus()">
       <input type="password" class="login-input" id="admin-pw"
-             placeholder="Admin password" autocomplete="current-password"
+             placeholder="Password" autocomplete="current-password"
              onkeyup="if(event.key==='Enter') doLogin()">
-      <button class="login-btn" onclick="doLogin()">
+      <button class="login-btn" id="login-btn" onclick="doLogin()">
         <i class="bi bi-shield-lock me-2"></i>Login
       </button>
-      <div class="login-error" id="login-error">Incorrect password. Please try again.</div>
-      <div style="margin-top:0.9rem;">
-        <a onclick="doForgotPw()" style="color:#6a4030;font-size:0.8rem;cursor:pointer;text-decoration:underline;">
-          Forgot password?
-        </a>
+      <div class="login-error" id="login-error"></div>
+      <div style="margin-top:0.9rem;font-size:0.78rem;color:#9a7060;">
+        <i class="bi bi-info-circle me-1"></i>
+        Locked out? Ask another admin to reset your account, or remove your row from the Auth sheet directly.
       </div>
     </div>
 
-    <!-- First-time setup (shown when no hash stored) -->
-    <div class="setup-section" id="setup-section">
-      <p><i class="bi bi-info-circle me-1"></i>First time? Create an admin password to get started.</p>
+    <!-- Invite-only signup (shown only when ?invite= token is valid) -->
+    <div class="setup-section" id="setup-section" style="display:none;">
+      <p style="font-size:0.85rem;color:#9a7060;">
+        <i class="bi bi-envelope-check me-1"></i>
+        You've been invited to create an admin account.
+      </p>
+      <input type="hidden"   id="setup-invite-token" value="">
       <input type="text"     class="login-input" id="setup-name"  placeholder="Your name" autocomplete="name">
-      <input type="email"    class="login-input" id="setup-email" placeholder="Your email" autocomplete="email">
-      <input type="password" class="login-input" id="setup-pw"    placeholder="New password (min 4 chars)">
+      <input type="email"    class="login-input" id="setup-email" placeholder="Email address" autocomplete="email">
+      <input type="password" class="login-input" id="setup-pw"    placeholder="New password (min 8 chars)">
       <input type="password" class="login-input" id="setup-pw2"   placeholder="Confirm password"
              onkeyup="if(event.key==='Enter') doSetup()">
-      <button class="login-btn green" onclick="doSetup()">
-        <i class="bi bi-check2 me-2"></i>Set Password &amp; Login
+      <button class="login-btn green" id="setup-btn" onclick="doSetup()">
+        <i class="bi bi-check2 me-2"></i>Create Account &amp; Login
       </button>
       <div class="login-error" id="setup-error"></div>
     </div>
@@ -119,6 +121,9 @@
       </button>
       <button class="pk-tab" id="tab-con" onclick="switchTab('con')">
         <i class="bi bi-cash-stack"></i> Contributions
+      </button>
+      <button class="pk-tab" id="tab-set" onclick="switchTab('set')">
+        <i class="bi bi-shield-lock"></i> Admin
       </button>
     </div>
 
@@ -264,6 +269,79 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Settings / Admin Management Panel ── -->
+    <div id="panel-set" style="display:none;">
+
+      <!-- Change Password -->
+      <div class="settings-card">
+        <h5 class="settings-section-title"><i class="bi bi-key me-2"></i>Change Password</h5>
+        <div style="max-width:380px;">
+          <input type="password" class="form-control mb-2" id="chpw-current"
+                 placeholder="Current password" autocomplete="current-password" style="border-radius:10px;">
+          <input type="password" class="form-control mb-2" id="chpw-new"
+                 placeholder="New password (min 8 chars)" autocomplete="new-password" style="border-radius:10px;">
+          <input type="password" class="form-control mb-3" id="chpw-confirm"
+                 placeholder="Confirm new password" autocomplete="new-password" style="border-radius:10px;"
+                 onkeyup="if(event.key==='Enter') doChangePassword()">
+          <div class="login-error mb-2" id="chpw-error" style="position:static;width:auto;border-radius:8px;"></div>
+          <div class="login-error mb-2" id="chpw-ok"
+               style="position:static;width:auto;border-radius:8px;background:#1a4a2a;border-color:#2a7a3a;"></div>
+          <button class="btn btn-primary fw-bold" id="chpw-btn" onclick="doChangePassword()"
+                  style="border-radius:10px;">Change Password</button>
+        </div>
+      </div>
+
+      <!-- Admin accounts -->
+      <div class="settings-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="settings-section-title mb-0"><i class="bi bi-people me-2"></i>Admin Accounts</h5>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadSettingsTab()"
+                  style="border-radius:8px;font-size:0.8rem;">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+          </button>
+        </div>
+        <div id="admin-list-body">
+          <div class="text-muted" style="font-size:0.85rem;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Invite management -->
+      <div class="settings-card">
+        <h5 class="settings-section-title"><i class="bi bi-envelope-plus me-2"></i>Invite a New Admin</h5>
+        <p style="font-size:0.83rem;color:var(--muted);margin-bottom:1rem;">
+          Generate a single-use invite link. Share it privately via text or email.
+          Links expire after 48 hours and can only be used once.
+        </p>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <button class="btn btn-success fw-semibold" onclick="generateInviteLink()"
+                  style="border-radius:10px;">
+            <i class="bi bi-link-45deg me-1"></i>Generate Invite Link
+          </button>
+        </div>
+        <div id="invite-link-box" style="display:none;" class="invite-link-box">
+          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.3rem;">
+            Copy and share this link privately — it expires in 48 hours and works only once:
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="text" class="form-control form-control-sm" id="invite-link-input"
+                   readonly style="border-radius:8px;font-family:monospace;font-size:0.8rem;background:#1a0f0a;color:#f5e6d3;border-color:#4a2a1a;">
+            <button class="btn btn-sm btn-outline-secondary" onclick="copyInviteLink()"
+                    id="copy-invite-btn" style="border-radius:8px;white-space:nowrap;">
+              <i class="bi bi-clipboard"></i> Copy
+            </button>
+          </div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem;" id="invite-expiry-label"></div>
+        </div>
+
+        <hr style="border-color:#3a1a0c;margin:1.5rem 0;">
+        <h6 style="font-weight:600;color:var(--accent);margin-bottom:1rem;">Invite History</h6>
+        <div id="invite-list-body">
+          <div class="text-muted" style="font-size:0.85rem;">Loading…</div>
+        </div>
+      </div>
+
+    </div><!-- /panel-set -->
 
   </div><!-- /pk-content -->
 </div><!-- /admin-panel -->
@@ -430,6 +508,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="./auth.js"></script>   <!-- must load before admin.js (defines apiRead, session) -->
 <script src="./admin.js"></script>
 </body>
 </html>
