@@ -943,3 +943,49 @@ body {
   vertical-align: middle;
   line-height: 1.4;
 }
+
+/* ══ SETTINGS TAB ══════════════════════════════════════════ */
+.settings-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.settings-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 1.1rem;
+}
+.invite-link-box {
+  background: #1a0f0a;
+  border: 1px solid #4a2a1a;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+/* Admin row in admin list */
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.admin-row:last-child { border-bottom: none; }
+.admin-row-info { flex: 1; }
+.badge-self {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #1a3a4a;
+  color: #4ab0ce;
+  border: 1px solid #2a6a8a;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 5px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

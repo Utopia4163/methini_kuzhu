@@ -1,12 +1,7 @@
 /* ════════════════════════════════════════════════════════════
-   🔧  CONFIGURATION  —  paste your Web App URL below
+   🔧  CONFIGURATION  —  SCRIPT_URL is now defined in auth.js
    ════════════════════════════════════════════════════════════ */
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHAXDtzr5AW66E5exX9DZO_9j9L_Fn9P4SyFaXc_4GB16Nn0WPlCYb7CyW4RMjeLB9/exec'; // ← Replace!
-
-/* ── Auth / identity keys ── */
-const AUTH_KEY        = 'pk_admin_hash';
-const ADMIN_NAME_KEY  = 'pk_admin_name';
-const ADMIN_EMAIL_KEY = 'pk_admin_email';
+// (SCRIPT_URL, apiRead, apiWrite defined in auth.js — loaded first)
 
 /* ── Runtime data ── */
 let allLogs        = [];
@@ -20,166 +15,30 @@ let contribModalInst = null;
 let historyModalInst = null;
 let cmState = { memberId: '', memberName: '', month: 0, year: 0, status: 'Paid' };
 
-/* ════════════════════════════════════════════════════════════
-   API helpers — CORS workaround for Apps Script
-   ─────────────────────────────────────────────────────────
-   Apps Script redirects via script.googleusercontent.com,
-   stripping CORS headers. Solution:
-     • Reads  → JSONP  (no CORS restriction on <script> tags)
-     • Writes → no-cors fetch (fire-and-forget; we re-read after)
-   ════════════════════════════════════════════════════════════ */
-
-function apiRead(params, timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    const cb  = 'pk_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
-    const url = `${SCRIPT_URL}?${new URLSearchParams({ ...params, callback: cb })}`;
-    const el  = document.createElement('script');
-    let timer;
-
-    window[cb] = (data) => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      resolve(data);
-    };
-    el.onerror = () => {
-      clearTimeout(timer);
-      el.remove();
-      delete window[cb];
-      reject(new Error('Network error — could not reach Apps Script.'));
-    };
-    timer = setTimeout(() => {
-      el.remove();
-      delete window[cb];
-      reject(new Error('Request timed out. Check your internet connection.'));
-    }, timeoutMs);
-
-    el.src = url;
-    document.head.appendChild(el);
-  });
-}
-
-function apiWrite(params) {
-  const url = `${SCRIPT_URL}?${new URLSearchParams(params)}`;
-  fetch(url, { mode: 'no-cors' }).catch(() => {});
-}
-
-/* ════════════════════════════════════════════════════════════
-   SHA-256 (Web Crypto API)
-   ════════════════════════════════════════════════════════════ */
-async function sha256(msg) {
-  const buf  = new TextEncoder().encode(msg);
-  const hash = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
+// apiRead, apiWrite — defined in auth.js (loaded before admin.js)
 
 /* ════════════════════════════════════════════════════════════
    Boot
    ════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
-  const hasHash    = !!localStorage.getItem(AUTH_KEY);
-  const savedName  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
-  const savedEmail = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
-
-  if (!hasHash) {
-    document.getElementById('login-sub').textContent = 'First-time setup — create an admin password';
-    document.getElementById('login-form').style.display    = 'none';
-    document.getElementById('setup-section').style.display = 'block';
-  } else {
-    if (savedName)  document.getElementById('admin-name-login').value  = savedName;
-    if (savedEmail) document.getElementById('admin-email-login').value = savedEmail;
-  }
-
   contribModalInst = new bootstrap.Modal(document.getElementById('contribModal'));
   historyModalInst = new bootstrap.Modal(document.getElementById('historyModal'));
   populateYearDropdown();
   initAttCalendar();
+  // Auth boot is in auth.js — checks session, validates invite token, or shows login form
+  authBoot();
 });
 
 /* ════════════════════════════════════════════════════════════
-   Auth
+   Auth  (doLogin / doSetup / doLogout / doChangePassword defined in auth.js)
    ════════════════════════════════════════════════════════════ */
-async function doLogin() {
-  const pw     = document.getElementById('admin-pw').value;
-  const name   = document.getElementById('admin-name-login').value.trim();
-  const email  = document.getElementById('admin-email-login').value.trim();
-  const stored = localStorage.getItem(AUTH_KEY);
-  if (!pw || !stored) return;
 
-  const hash = await sha256(pw);
-  if (hash === stored) {
-    if (name)  localStorage.setItem(ADMIN_NAME_KEY, name);
-    if (email) localStorage.setItem(ADMIN_EMAIL_KEY, email);
-    enterAdmin();
-  } else {
-    document.getElementById('login-error').style.display = 'block';
-    document.getElementById('admin-pw').value = '';
-    document.getElementById('admin-pw').focus();
-  }
-}
-
-async function doSetup() {
-  const name  = document.getElementById('setup-name').value.trim();
-  const email = document.getElementById('setup-email').value.trim();
-  const pw    = document.getElementById('setup-pw').value;
-  const pw2   = document.getElementById('setup-pw2').value;
-  const errEl = document.getElementById('setup-error');
-
-  if (!pw || pw.length < 4) {
-    errEl.textContent = 'Password must be at least 4 characters.';
-    errEl.style.display = 'block'; return;
-  }
-  if (pw !== pw2) {
-    errEl.textContent = 'Passwords do not match.';
-    errEl.style.display = 'block'; return;
-  }
-  errEl.style.display = 'none';
-
-  const hash = await sha256(pw);
-  localStorage.setItem(AUTH_KEY, hash);
-  if (name)  localStorage.setItem(ADMIN_NAME_KEY, name);
-  if (email) localStorage.setItem(ADMIN_EMAIL_KEY, email);
-  enterAdmin();
-}
-
-function doForgotPw() {
-  if (!confirm('This will clear the stored password from this device, allowing anyone with access to set a new admin password.\n\nContinue to reset?')) return;
-  localStorage.removeItem(AUTH_KEY);
-  document.getElementById('login-error').style.display  = 'none';
-  document.getElementById('login-form').style.display   = 'none';
-  document.getElementById('setup-section').style.display = 'block';
-  document.getElementById('login-sub').textContent = 'Reset password — set a new one below';
-  const n = localStorage.getItem(ADMIN_NAME_KEY)  || '';
-  const e = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
-  if (n) document.getElementById('setup-name').value  = n;
-  if (e) document.getElementById('setup-email').value = e;
-}
-
-function doLogout() {
-  document.getElementById('admin-panel').style.display  = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('admin-pw').value = '';
-
-  const savedName  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
-  const savedEmail = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
-  document.getElementById('admin-name-login').value  = savedName;
-  document.getElementById('admin-email-login').value = savedEmail;
-
-  const hasHash = !!localStorage.getItem(AUTH_KEY);
-  if (hasHash) {
-    document.getElementById('login-form').style.display    = 'block';
-    document.getElementById('setup-section').style.display = 'none';
-    document.getElementById('login-sub').textContent = 'Admin Dashboard';
-  }
-}
-
-function enterAdmin() {
+// Called by auth.js after successful login or valid session restore.
+function enterAdmin(name, email) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('admin-panel').style.display  = 'block';
-  const name  = localStorage.getItem(ADMIN_NAME_KEY)  || 'Admin';
-  const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
   document.getElementById('navbar-admin-name').textContent =
-    email ? `${name} (${email})` : name;
+    name ? `${name} (${email})` : (email || 'Admin');
   initDashboard();
 }
 
@@ -216,10 +75,11 @@ async function loadContribLog() {
 
 /* ── Tabs ── */
 function switchTab(id) {
-  ['att','mem','con'].forEach(t => {
+  ['att','mem','con','set'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t === id);
     document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
   });
+  if (id === 'set') loadSettingsTab();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -979,8 +839,7 @@ async function submitEditTags() {
   btn.disabled = true;
   btn.innerHTML = '<span class="pk-spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.2);display:inline-block;vertical-align:middle;"></span> Saving…';
 
-  apiWrite({ action: 'updateMemberTags', localId: _etMemberId, tags });
-  await new Promise(r => setTimeout(r, 1100));
+  await apiRead({ action: 'updateMemberTags', localId: _etMemberId, tags });
 
   editTagsModalInst.hide();
   btn.disabled = false;
@@ -1196,9 +1055,10 @@ function openContribModal(memberId, memberName, month, year) {
   document.getElementById('cm-notes').value  = displayNotes;
   document.getElementById('cm-amount').value = hasRecord ? (existing.amount || (isOB ? 0 : 30)) : (isOB ? 0 : 30);
 
-  const name  = localStorage.getItem(ADMIN_NAME_KEY)  || '';
-  const email = localStorage.getItem(ADMIN_EMAIL_KEY) || '';
-  document.getElementById('cm-by').value = (name && email) ? `${name} (${email})` : (name || '');
+  const sess  = getSession();
+  const name  = sess?.name  || '';
+  const email = sess?.email || '';
+  document.getElementById('cm-by').value = (name && email) ? `${name} (${email})` : (name || email || '');
 
   refreshCMButtons();
 
@@ -1501,4 +1361,152 @@ function showToast(msg, type) {
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.classList.remove('show'); el.classList.remove('toast-error'); }, type === 'error' ? 4000 : 2800);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Settings Tab — Admin management & Invite management
+   ════════════════════════════════════════════════════════════ */
+
+async function loadSettingsTab() {
+  await Promise.all([loadAdminList(), loadInviteList()]);
+}
+
+/* ── Admin list ─────────────────────────────────────────────── */
+
+async function loadAdminList() {
+  const body = document.getElementById('admin-list-body');
+  body.innerHTML = '<div class="text-muted" style="font-size:0.85rem;">Loading…</div>';
+  try {
+    const res     = await apiRead({ action: 'listAdmins' });
+    const admins  = res.admins || [];
+    const myEmail = getSession()?.email || '';
+
+    if (!admins.length) {
+      body.innerHTML = '<div class="text-muted" style="font-size:0.85rem;">No admin accounts found.</div>';
+      return;
+    }
+
+    body.innerHTML = admins.map(a => {
+      const isSelf    = a.email.toLowerCase() === myEmail.toLowerCase();
+      const createdAt = a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) : '—';
+      return `<div class="admin-row">
+        <div class="admin-row-info">
+          <strong>${esc(a.name)}</strong>
+          <span style="color:var(--muted);font-size:0.8rem;margin-left:0.4rem;">${esc(a.email)}</span>
+          ${isSelf ? '<span class="badge-self">You</span>' : ''}
+          <div style="font-size:0.73rem;color:var(--muted);margin-top:0.1rem;">
+            Added ${createdAt}${a.createdBy && a.createdBy !== a.email ? ' by ' + esc(a.createdBy) : ''}
+          </div>
+        </div>
+        ${!isSelf ? `<button class="btn btn-sm btn-outline-danger" style="border-radius:8px;font-size:0.78rem;"
+                onclick="removeAdminAccount('${esc(a.email)}','${esc(a.name)}')">
+          <i class="bi bi-person-x"></i> Remove
+        </button>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<div style="color:#e74c3c;font-size:0.85rem;">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+async function removeAdminAccount(email, name) {
+  if (!confirm(`Remove admin access for ${name} (${email})?\n\nThey will no longer be able to log in.`)) return;
+  try {
+    const res = await apiRead({ action: 'removeAdmin', email });
+    if (res.success) {
+      showToast(`${name} removed ✓`);
+      loadAdminList();
+    } else {
+      showToast(res.error || 'Could not remove admin', 'error');
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+/* ── Invite management ──────────────────────────────────────── */
+
+async function generateInviteLink() {
+  const createdBy = getSession()?.email || 'Admin';
+  try {
+    const res = await apiRead({ action: 'generateInvite', createdBy });
+    if (!res.success) { showToast(res.error || 'Could not generate invite', 'error'); return; }
+
+    const base = window.location.origin + window.location.pathname;
+    const link = `${base}?invite=${res.token}`;
+    document.getElementById('invite-link-input').value = link;
+
+    const exp = new Date(res.expiresAt);
+    document.getElementById('invite-expiry-label').textContent =
+      `Expires: ${exp.toLocaleString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}`;
+
+    document.getElementById('invite-link-box').style.display = '';
+    loadInviteList();
+    showToast('Invite link generated ✓');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('invite-link-input');
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = document.getElementById('copy-invite-btn');
+    btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy'; }, 2000);
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    showToast('Copied ✓');
+  });
+}
+
+async function loadInviteList() {
+  const body = document.getElementById('invite-list-body');
+  try {
+    const res     = await apiRead({ action: 'listInvites' });
+    const invites = res.invites || [];
+
+    if (!invites.length) {
+      body.innerHTML = '<div class="text-muted" style="font-size:0.83rem;">No invites generated yet.</div>';
+      return;
+    }
+
+    body.innerHTML = `<div class="table-responsive">
+      <table class="table table-sm" style="font-size:0.82rem;">
+        <thead><tr style="color:var(--muted);">
+          <th>Status</th><th>Generated</th><th>Expires</th><th>By</th><th>Used by</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${invites.map(iv => {
+            const statusCls = iv.status === 'pending' ? 'badge-paid' : (iv.status === 'used' ? 'badge bg-secondary' : 'badge-unpaid');
+            const genDate   = iv.createdAt ? new Date(iv.createdAt).toLocaleDateString('en-AU', {day:'numeric',month:'short'}) : '—';
+            const expDate   = iv.expiresAt ? new Date(iv.expiresAt).toLocaleDateString('en-AU', {day:'numeric',month:'short'}) : '—';
+            const revokeBtn = iv.status === 'pending'
+              ? `<button class="btn btn-sm btn-outline-danger" style="border-radius:6px;font-size:0.73rem;padding:2px 8px;"
+                         onclick="revokeInviteToken('${esc(iv.token)}')">Revoke</button>` : '';
+            return `<tr>
+              <td><span class="${statusCls}" style="text-transform:capitalize;">${iv.status}</span></td>
+              <td>${genDate}</td>
+              <td>${expDate}</td>
+              <td style="color:var(--muted);">${esc(iv.createdBy || '—')}</td>
+              <td style="color:var(--muted);">${esc(iv.usedByEmail || '—')}</td>
+              <td>${revokeBtn}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  } catch (e) {
+    body.innerHTML = `<div style="color:#e74c3c;font-size:0.83rem;">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+async function revokeInviteToken(token) {
+  if (!confirm('Revoke this invite? It will immediately stop working.')) return;
+  try {
+    const res = await apiRead({ action: 'revokeInvite', token });
+    if (res.success) { showToast('Invite revoked ✓'); loadInviteList(); }
+    else showToast(res.error || 'Could not revoke', 'error');
+  } catch (e) { showToast(e.message, 'error'); }
 }
