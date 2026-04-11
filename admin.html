@@ -562,6 +562,73 @@
   </div>
 </div>
 
+<!-- ══ EDIT MEMBER MODAL ═════════════════════════════════════ -->
+<div class="modal fade ck-modal" id="editMemberModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;">
+          Editing: <strong id="em-member-name" style="color:var(--text);"></strong>
+        </div>
+        <input type="hidden" id="em-member-id">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="em-shortname">
+            SHORT NAME / NICKNAME <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <input type="text" class="form-control" id="em-shortname"
+                 placeholder="e.g. Senthil" style="border-radius:10px;" autocomplete="off">
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:0.3rem;">
+            Shown in the attendance calendar grid instead of the full name.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="em-phone">
+            PHONE <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <input type="tel" class="form-control" id="em-phone"
+                 placeholder="e.g. 0412 345 678" style="border-radius:10px;"
+                 autocomplete="off" inputmode="tel">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="em-notes">
+            NOTES <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <textarea class="form-control" id="em-notes" rows="2"
+                    placeholder="Any notes about this member…"
+                    style="border-radius:10px;resize:none;"></textarea>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">
+            ROLES / TAGS <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <div class="tag-input-wrap" id="em-tags-wrap"
+               onclick="document.getElementById('em-tag-text').focus()">
+            <input type="text" class="tag-input-text" id="em-tag-text"
+                   placeholder="Type role, press Enter…" autocomplete="off"
+                   onkeydown="handleTagKey(event,'em')">
+          </div>
+          <div style="font-size:0.73rem;color:var(--muted);margin-top:0.35rem;">
+            Press <kbd style="font-size:0.7rem;">Enter</kbd> or <kbd style="font-size:0.7rem;">,</kbd> to add · click <strong>×</strong> to remove.
+          </div>
+        </div>
+        <div class="login-error mt-2" id="em-error" style="position:static;width:auto;border-radius:8px;display:none;"></div>
+      </div>
+      <div class="modal-footer px-4 pb-4 pt-3">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Cancel</button>
+        <button class="btn btn-primary fw-bold" id="em-submit" onclick="submitEditMember()"
+                style="border-radius:10px;min-width:120px;background:var(--orange);border-color:var(--orange);">
+          <i class="bi bi-check2 me-1"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ CONTRIBUTION CHANGE MODAL ══════════════════════════════ -->
 <div class="modal fade ck-modal" id="contribModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">

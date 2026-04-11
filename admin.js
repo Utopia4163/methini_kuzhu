@@ -168,25 +168,29 @@ async function loadLogs() {
   }
 }
 
-/* 'dd/MM/yyyy' → [localid, …]  — all members (excludes voided) */
+/* 'dd/MM/yyyy' → [{id, name}, …]  — all members (excludes voided) */
 function _buildAttDayMap() {
   _attDayMap = {};
   allLogs.forEach(l => {
     if (!l.date || l.status === 'Voided') return;
     if (!_attDayMap[l.date]) _attDayMap[l.date] = [];
-    _attDayMap[l.date].push(l.localid || l.name || '?');
+    _attDayMap[l.date].push({ id: l.localid || '', name: l.name || '?' });
   });
 }
 
 /**
  * Display name for the attendance grid.
- * Shows shortName if set, otherwise the first word of the full name.
- * Falls back to the localId string if the member isn't in the roster yet.
+ * Priority: member shortName → member first name → log's recorded name first word.
+ * Never shows a raw UUID.
  */
-function _displayName(localIdOrName) {
-  const m = _membersById[localIdOrName];
-  if (!m) return localIdOrName; // fallback for legacy / unmatched entries
-  return (m.shortName && m.shortName.trim()) ? m.shortName.trim() : m.name.split(' ')[0];
+function _displayName(entry) {
+  // entry can be a {id, name} object (new) or a plain string (legacy)
+  const id      = (typeof entry === 'object') ? entry.id   : entry;
+  const logName = (typeof entry === 'object') ? entry.name : entry;
+  const m = _membersById[id];
+  if (m) return (m.shortName && m.shortName.trim()) ? m.shortName.trim() : m.name.split(' ')[0];
+  // Fallback to the name recorded in the attendance log
+  return logName ? logName.split(' ')[0] : (id || '?');
 }
 
 /* localid → Set<'dd/MM/yyyy'>  — per-member presence lookup (excludes voided) */
@@ -290,12 +294,15 @@ function renderAttCalendar() {
           inner += `<div class="att-count-pill"><i class="bi bi-check2"></i> Present</div>`;
         }
       } else {
-        const ids = _attDayMap[key] || [];
-        hasAtt = ids.length > 0;
+        const entries = _attDayMap[key] || [];
+        hasAtt = entries.length > 0;
         if (hasAtt) {
-          inner += `<div class="att-count-pill">${ids.length} present</div>`;
-          const unique  = [...new Set(ids)];
-          const preview = unique.slice(0, 3).map(id => esc(_displayName(id))).join(', ');
+          // De-duplicate by id, preserve first-seen entry for display
+          const seen = new Map();
+          entries.forEach(e => { if (!seen.has(e.id)) seen.set(e.id, e); });
+          const unique  = [...seen.values()];
+          inner += `<div class="att-count-pill">${unique.length} present</div>`;
+          const preview = unique.slice(0, 3).map(e => esc(_displayName(e))).join(', ');
           const more    = unique.length > 3 ? ` +${unique.length - 3}` : '';
           inner += `<div class="att-day-names">${preview}${more}</div>`;
         }
@@ -634,7 +641,7 @@ function renderMembers() {
         ${tagBadges ? `<div style="margin-top:0.25rem;display:flex;flex-wrap:wrap;gap:0.25rem;">${tagBadges}</div>` : ''}
       </td>
       <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
-      <td style="font-size:0.83rem;color:var(--muted);">${esc(m.joinDate || '–')}</td>
+      <td style="font-size:0.83rem;color:var(--muted);">${_timeAgo(m.joinDate || '–')}</td>
       <td>
         <div style="display:flex;flex-direction:column;gap:0.2rem;align-items:flex-start;">
           <button class="contrib-link-btn"
@@ -642,8 +649,8 @@ function renderMembers() {
             <i class="bi bi-cash-coin me-1"></i>Contributions
           </button>
           <button class="edit-tags-btn"
-                  onclick="openEditTagsModal('${escapedId}','${escapedName}','${escapedTags}')">
-            <i class="bi bi-tags me-1"></i>Edit Roles
+                  onclick="openEditMemberModal('${escapedId}')">
+            <i class="bi bi-pencil me-1"></i>Edit
           </button>
         </div>
       </td>
@@ -668,6 +675,73 @@ function goToContribs(memberId, memberName) {
     const now = new Date();
     openContribModal(memberId, memberName, now.getMonth() + 1, now.getFullYear());
   }, 180);
+}
+
+/* ── Edit Member ─────────────────────────────────────────────── */
+let editMemberModalInst = null;
+
+function openEditMemberModal(localId) {
+  const m = allMembers.find(x => x.localId === localId);
+  if (!m) return;
+
+  if (!editMemberModalInst)
+    editMemberModalInst = new bootstrap.Modal(document.getElementById('editMemberModal'));
+
+  document.getElementById('em-member-id').value    = m.localId;
+  document.getElementById('em-member-name').textContent = m.name;
+  document.getElementById('em-shortname').value    = m.shortName || '';
+  document.getElementById('em-phone').value        = m.phone     || '';
+  document.getElementById('em-notes').value        = m.notes     || '';
+  document.getElementById('em-error').style.display = 'none';
+
+  _resetTagInput('em', m.tags || '');
+
+  const btn = document.getElementById('em-submit');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Save Changes';
+
+  editMemberModalInst.show();
+  setTimeout(() => document.getElementById('em-shortname').focus(), 350);
+}
+
+async function submitEditMember() {
+  const localId   = document.getElementById('em-member-id').value;
+  const shortName = document.getElementById('em-shortname').value.trim();
+  const phone     = document.getElementById('em-phone').value.trim();
+  const notes     = document.getElementById('em-notes').value.trim();
+  const errEl     = document.getElementById('em-error');
+  errEl.style.display = 'none';
+
+  const typedTag = document.getElementById('em-tag-text').value.replace(/,/g, '').trim();
+  if (typedTag) _addTag('em', typedTag);
+  const tags = _tagState.em.join(',');
+
+  const btn = document.getElementById('em-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="pk-spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.2);display:inline-block;vertical-align:middle;"></span> Saving…';
+
+  try {
+    const res = await apiRead({ action: 'updateMember', localId, shortName, phone, notes, tags });
+    if (!res.success) {
+      errEl.textContent = res.error || 'Could not save changes. Please try again.';
+      errEl.style.display = 'block';
+      return;
+    }
+    editMemberModalInst.hide();
+    await loadMembers();
+    // Rebuild att maps so shortname shows immediately in the calendar
+    _membersById = {};
+    allMembers.forEach(m => { _membersById[m.localId] = m; });
+    renderAttCalendar();
+    if (_attView === 'matrix') renderAttHeatmap();
+    showToast('Member updated ✓');
+  } catch {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Save Changes';
+  }
 }
 
 /* ── Add Member ─────────────────────────────────────────────── */
@@ -1358,6 +1432,61 @@ function updateTopStats() {
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+/* Human-friendly relative date + formatted date in brackets.
+   Input: joinDate string as stored in sheet — typically 'D/M/YYYY' or 'DD/MM/YYYY'
+   Output: e.g.  "2 years 3 months ago (4 Aug 2024)"  or  "just now"             */
+function _timeAgo(dateStr) {
+  if (!dateStr || dateStr === '–') return '–';
+
+  // Parse D/M/YYYY or DD/MM/YYYY
+  const parts = String(dateStr).trim().split('/');
+  if (parts.length !== 3) return esc(dateStr);
+  const [d, mo, y] = parts.map(Number);
+  if (!d || !mo || !y) return esc(dateStr);
+  const then = new Date(y, mo - 1, d);
+  if (isNaN(then)) return esc(dateStr);
+
+  // Formatted date label  →  "4 Aug 2024"
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const label   = `${d} ${months[mo - 1]} ${y}`;
+
+  const now      = new Date();
+  // Zero out time components for day-accurate math
+  const nowDay   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const thenDay  = new Date(y, mo - 1, d);
+  const diffMs   = nowDay - thenDay;
+  const diffDays = Math.round(diffMs / 86400000);
+
+  let rel;
+  if (diffDays < 0) {
+    rel = 'in the future';
+  } else if (diffDays === 0) {
+    rel = 'today';
+  } else if (diffDays === 1) {
+    rel = 'yesterday';
+  } else if (diffDays < 7) {
+    rel = `${diffDays} days ago`;
+  } else if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    rel = `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+  } else if (diffDays < 365) {
+    const mos = Math.floor(diffDays / 30);
+    rel = `${mos} month${mos > 1 ? 's' : ''} ago`;
+  } else {
+    const years = Math.floor(diffDays / 365);
+    const remDays = diffDays - years * 365;
+    const mos = Math.floor(remDays / 30);
+    if (mos > 0) {
+      rel = `${years} year${years > 1 ? 's' : ''} ${mos} month${mos > 1 ? 's' : ''} ago`;
+    } else {
+      rel = `${years} year${years > 1 ? 's' : ''} ago`;
+    }
+  }
+
+  if (rel === 'today' || rel === 'yesterday') return `${rel} (${label})`;
+  return `${rel}<br><small style="font-size:0.75em;opacity:0.7;">${label}</small>`;
+}
 /* Escape for use inside onclick='…' single-quoted JS string literals */
 function escJs(s) {
   return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1395,25 +1524,9 @@ async function loadSettingsTab() {
    ════════════════════════════════════════════════════════════ */
 
 async function loadCheckinSettings() {
-  const sess = getSession();
-  if (!sess?.email) return;
-
   try {
-    const res = await apiRead({
-      action: 'getCheckinSettings',
-      email:  sess.email,
-      hash:   '',            // read-only fetch — verifyAdmin checks email+hash;
-                             // pass empty hash so GAS returns gracefully if
-                             // a read-only path is added; alternatively supply hash.
-    });
-
-    // NOTE: getCheckinSettings calls verifyAdmin which needs a valid hash.
-    // We piggyback on the stored session which only holds email+name.
-    // Simple workaround: call without auth and let GAS allow it (tweak if needed).
-    if (res.error) {
-      // Silently ignore auth errors — settings will load on next hard login
-      return;
-    }
+    const res = await apiRead({ action: 'getCheckinSettings' });
+    if (res.error) return; // silently skip on error
 
     const toggle   = document.getElementById('toggle-require-session');
     const controls = document.getElementById('session-gate-controls');
@@ -1460,12 +1573,7 @@ async function onSessionGateToggle(enabled) {
   // action through the worker and let the GAS-side check handle it gracefully.
   // If you want strict auth here, prompt for password confirmation.
   try {
-    const sess = getSession();
-    const res  = await apiRead({
-      action:               'saveCheckinSettings',
-      email:                sess?.email || '',
-      requireOpenSession:   enabled,
-    });
+    const res = await apiRead({ action: 'saveCheckinSettings', requireOpenSession: enabled });
 
     if (res.error) {
       statusEl.style.color = '#e74c3c';
@@ -1493,8 +1601,7 @@ async function openCheckinSession() {
   const statusEl = document.getElementById('checkin-settings-status');
   statusEl.textContent = 'Opening session…';
   try {
-    const sess = getSession();
-    const res  = await apiRead({ action: 'openCheckinSession', email: sess?.email || '' });
+    const res = await apiRead({ action: 'openCheckinSession' });
     if (res.success) {
       renderSessionStatus(true, res.sessionDate);
       statusEl.style.color = '#27ae60';
@@ -1513,8 +1620,7 @@ async function closeCheckinSession() {
   const statusEl = document.getElementById('checkin-settings-status');
   statusEl.textContent = 'Closing session…';
   try {
-    const sess = getSession();
-    const res  = await apiRead({ action: 'closeCheckinSession', email: sess?.email || '' });
+    const res = await apiRead({ action: 'closeCheckinSession' });
     if (res.success) {
       renderSessionStatus(false, '');
       statusEl.style.color = 'var(--muted)';
