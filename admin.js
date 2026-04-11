@@ -643,16 +643,10 @@ function renderMembers() {
       <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
       <td style="font-size:0.83rem;color:var(--muted);">${_timeAgo(m.joinDate || '–')}</td>
       <td>
-        <div style="display:flex;flex-direction:column;gap:0.2rem;align-items:flex-start;">
-          <button class="contrib-link-btn"
-                  onclick="goToContribs('${escapedId}','${escapedName}')">
-            <i class="bi bi-cash-coin me-1"></i>Contributions
-          </button>
-          <button class="edit-tags-btn"
-                  onclick="openEditMemberModal('${escapedId}')">
-            <i class="bi bi-pencil me-1"></i>Edit
-          </button>
-        </div>
+        <button class="edit-tags-btn"
+                onclick="openEditMemberModal('${escapedId}')">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </button>
       </td>
     </tr>`;
   }).join('');
@@ -1418,12 +1412,11 @@ function updateTopStats() {
   const month = now.getMonth() + 1;
   const year  = now.getFullYear();
 
-  const thisMonth = allLogs.filter(l => {
-    if (!l.date) return false;
-    const [d,m,y] = l.date.split('/');
-    return parseInt(m) === month && parseInt(y) === year;
+  const paidThisMonth = allContribsAll.filter(c => {
+    return parseInt(c.month) === month && parseInt(c.year) === year && c.status === 'Paid';
   });
-  document.getElementById('s-month').textContent = thisMonth.length;
+  const sPaid = document.getElementById('s-paid');
+  if (sPaid) sPaid.textContent = paidThisMonth.length;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1439,17 +1432,29 @@ function esc(s) {
 function _timeAgo(dateStr) {
   if (!dateStr || dateStr === '–') return '–';
 
-  // Parse D/M/YYYY or DD/MM/YYYY
-  const parts = String(dateStr).trim().split('/');
-  if (parts.length !== 3) return esc(dateStr);
-  const [d, mo, y] = parts.map(Number);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let d, mo, y;
+  const s = String(dateStr).trim();
+
+  if (s.includes('T') || s.includes('-')) {
+    // ISO format: 2026-04-10T05:00:00.000Z  or  2026-04-10
+    const dt = new Date(s);
+    if (isNaN(dt)) return esc(dateStr);
+    d  = dt.getUTCDate();
+    mo = dt.getUTCMonth() + 1;
+    y  = dt.getUTCFullYear();
+  } else if (s.includes('/')) {
+    // Sheet format: D/M/YYYY or DD/MM/YYYY
+    const parts = s.split('/').map(Number);
+    if (parts.length !== 3) return esc(dateStr);
+    [d, mo, y] = parts;
+  } else {
+    return esc(dateStr);
+  }
   if (!d || !mo || !y) return esc(dateStr);
-  const then = new Date(y, mo - 1, d);
-  if (isNaN(then)) return esc(dateStr);
 
   // Formatted date label  →  "4 Aug 2024"
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const label   = `${d} ${months[mo - 1]} ${y}`;
+  const label = `${d} ${months[mo - 1]} ${y}`;
 
   const now      = new Date();
   // Zero out time components for day-accurate math
