@@ -77,12 +77,13 @@ async function loadContribLog() {
 
 /* ── Tabs ── */
 function switchTab(id) {
-  ['att','mem','con','exp','set'].forEach(t => {
+  ['att','mem','con','exp','evt','set'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t === id);
     document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
   });
   if (id === 'set') loadSettingsTab();
   if (id === 'exp') loadExpenses();
+  if (id === 'evt') loadEvents();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -2166,5 +2167,263 @@ async function renderStatement() {
 
   } catch (e) {
     body.innerHTML = `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Events — Performance & Event History
+   ════════════════════════════════════════════════════════════ */
+
+let allEvents       = [];
+let eventModalInst  = null;
+
+async function loadEvents() {
+  const container = document.getElementById('evt-list');
+  container.innerHTML = `<div class="text-center py-5 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>`;
+  try {
+    const data = await apiRead({ action: 'getEvents' });
+    allEvents  = data.events || [];
+    renderEvents();
+    _updateBlogLink();
+  } catch (e) {
+    container.innerHTML = `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+function _updateBlogLink() {
+  const url   = localStorage.getItem('pk_blog_url') || '';
+  const link  = document.getElementById('evt-blog-link');
+  const notice = document.getElementById('evt-blogger-notice');
+  if (url) {
+    link.href          = url;
+    link.style.display = 'flex';
+    notice.style.display = 'none';
+  } else {
+    link.style.display = 'none';
+    notice.style.display = '';
+    const inp = document.getElementById('evt-blog-url-input');
+    if (inp) inp.value = '';
+  }
+}
+
+function saveBlogUrl() {
+  const url = (document.getElementById('evt-blog-url-input').value || '').trim();
+  if (!url) return;
+  localStorage.setItem('pk_blog_url', url);
+  _updateBlogLink();
+  showToast('Blog URL saved ✓');
+}
+
+function renderEvents() {
+  const container = document.getElementById('evt-list');
+  if (!allEvents.length) {
+    container.innerHTML = `<div class="empty-state">
+      <span class="empty-icon">🥁</span>
+      No events yet. Use "Add Event" to record the group's first performance.
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = allEvents.map(ev => {
+    const isPublished = ev.status === 'Published';
+    const dateLabel   = _fmtEventDate(ev.eventDate);
+    const ytLinks     = ev.youtubeLinks ? ev.youtubeLinks.split(',').map(u => u.trim()).filter(Boolean) : [];
+    const photoLinks  = ev.photoLinks   ? ev.photoLinks.split(',').map(u => u.trim()).filter(Boolean)   : [];
+    const tags        = ev.tags         ? ev.tags.split(',').map(t => t.trim()).filter(Boolean)          : [];
+
+    const tagHtml = tags.map(t =>
+      `<span style="display:inline-block;padding:0.15em 0.6em;background:#f0e8e0;color:#5c2d0e;
+              border-radius:20px;font-size:0.75em;margin:0.1rem;">${esc(t)}</span>`
+    ).join('');
+
+    const mediaBadges = [
+      ytLinks.length    ? `<span style="font-size:0.75rem;color:var(--muted);"><i class="bi bi-youtube text-danger me-1"></i>${ytLinks.length} video${ytLinks.length > 1 ? 's' : ''}</span>` : '',
+      photoLinks.length ? `<span style="font-size:0.75rem;color:var(--muted);"><i class="bi bi-images me-1"></i>${photoLinks.length} photo${photoLinks.length > 1 ? 's' : ''}</span>` : '',
+    ].filter(Boolean).join('&nbsp; ');
+
+    const statusBadge = isPublished
+      ? `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;
+              background:#e6f4ea;color:#1a7a3c;padding:0.2em 0.7em;border-radius:20px;">
+           <i class="bi bi-check-circle-fill"></i> Published
+         </span>`
+      : `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;
+              background:#f0e8e0;color:#7a4f2e;padding:0.2em 0.7em;border-radius:20px;">
+           <i class="bi bi-pencil-square"></i> Draft
+         </span>`;
+
+    const publishBtn = isPublished
+      ? `<button class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:0.8rem;"
+                 onclick="unpublishEvent('${esc(ev.eventId)}')">
+           <i class="bi bi-cloud-slash me-1"></i>Unpublish
+         </button>
+         <a href="${esc(ev.bloggerPostUrl)}" target="_blank" rel="noopener"
+            class="btn btn-sm btn-outline-primary" style="border-radius:8px;font-size:0.8rem;">
+           <i class="bi bi-box-arrow-up-right me-1"></i>View Post
+         </a>`
+      : `<button class="btn btn-sm btn-success" style="border-radius:8px;font-size:0.8rem;"
+                 onclick="publishEvent('${esc(ev.eventId)}')">
+           <i class="bi bi-cloud-upload me-1"></i>Publish to Blogger
+         </button>`;
+
+    const descSnippet = ev.description
+      ? `<div style="font-size:0.84rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;
+                     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+           ${esc(ev.description)}
+         </div>`
+      : '';
+
+    return `<div style="background:var(--surface);border-radius:14px;padding:1.1rem 1.25rem;
+                        margin-bottom:0.85rem;box-shadow:0 1px 6px rgba(0,0,0,0.05);">
+      <div style="display:flex;align-items:flex-start;gap:0.75rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.2rem;">
+            ${statusBadge}
+            <span style="font-size:0.8rem;color:var(--muted);">${esc(dateLabel)}</span>
+            ${ev.location ? `<span style="font-size:0.8rem;color:var(--muted);">· ${esc(ev.location)}</span>` : ''}
+          </div>
+          <div style="font-weight:700;font-size:1.05rem;color:var(--text);">${esc(ev.title)}</div>
+          ${descSnippet}
+          <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            ${tagHtml}
+            ${mediaBadges}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.35rem;align-items:flex-end;flex-shrink:0;">
+          <button class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:0.8rem;"
+                  onclick="openEventModal('${esc(ev.eventId)}')">
+            <i class="bi bi-pencil me-1"></i>Edit
+          </button>
+          ${publishBtn}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _fmtEventDate(dateStr) {
+  if (!dateStr) return '';
+  const dt = new Date(dateStr);
+  if (isNaN(dt)) return dateStr;
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/* ── Add / Edit Event Modal ─────────────────────────────── */
+function openEventModal(eventId) {
+  if (!eventModalInst) eventModalInst = new bootstrap.Modal(document.getElementById('eventModal'));
+
+  const isEdit = !!eventId;
+  document.getElementById('evt-modal-title').innerHTML =
+    `<i class="bi bi-camera-reels me-2"></i>${isEdit ? 'Edit Event' : 'Add Event'}`;
+  document.getElementById('evt-delete-btn').style.display = isEdit ? '' : 'none';
+  document.getElementById('evt-save-btn').textContent = 'Save Draft';
+
+  if (isEdit) {
+    const ev = allEvents.find(e => e.eventId === eventId);
+    if (!ev) return;
+    document.getElementById('evt-id').value          = ev.eventId;
+    document.getElementById('evt-title').value       = ev.title;
+    document.getElementById('evt-date').value        = ev.eventDate || '';
+    document.getElementById('evt-location').value    = ev.location;
+    document.getElementById('evt-description').value = ev.description;
+    document.getElementById('evt-youtube').value     = (ev.youtubeLinks || '').split(',').map(s => s.trim()).filter(Boolean).join('\n');
+    document.getElementById('evt-photos').value      = ev.photoLinks;
+    document.getElementById('evt-tags').value        = ev.tags;
+  } else {
+    document.getElementById('evt-id').value          = '';
+    document.getElementById('evt-title').value       = '';
+    document.getElementById('evt-date').value        = '';
+    document.getElementById('evt-location').value    = '';
+    document.getElementById('evt-description').value = '';
+    document.getElementById('evt-youtube').value     = '';
+    document.getElementById('evt-photos').value      = '';
+    document.getElementById('evt-tags').value        = '';
+  }
+  eventModalInst.show();
+}
+
+async function submitEvent() {
+  const eventId     = document.getElementById('evt-id').value.trim();
+  const title       = document.getElementById('evt-title').value.trim();
+  const eventDate   = document.getElementById('evt-date').value.trim();
+  const location    = document.getElementById('evt-location').value.trim();
+  const description = document.getElementById('evt-description').value.trim();
+  const youtubeRaw  = document.getElementById('evt-youtube').value.trim();
+  const photoLinks  = document.getElementById('evt-photos').value.trim();
+  const tags        = document.getElementById('evt-tags').value.trim();
+
+  if (!title)     { showToast('Title is required.', 'error'); return; }
+  if (!eventDate) { showToast('Date is required.', 'error'); return; }
+
+  // Normalise YouTube — allow newlines and commas as separators
+  const youtubeLinks = youtubeRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(', ');
+
+  const btn = document.getElementById('evt-save-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const action  = eventId ? 'updateEvent' : 'addEvent';
+    const payload = { action, title, eventDate, location, description, youtubeLinks, photoLinks, tags };
+    if (eventId) payload.eventId = eventId;
+
+    const res = await apiRead(payload);
+    if (!res.success) throw new Error(res.error || 'Save failed');
+
+    eventModalInst.hide();
+    await loadEvents();
+    showToast(eventId ? 'Event updated ✓' : 'Event saved as draft ✓');
+  } catch (err) {
+    showToast(err.message || 'Could not save — try again.', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Save Draft';
+  }
+}
+
+async function confirmDeleteEvent() {
+  const eventId = document.getElementById('evt-id').value.trim();
+  const title   = document.getElementById('evt-title').value.trim();
+  if (!confirm(`Delete "${title}"?\n\nThis cannot be undone. Unpublish from Blogger first if already published.`)) return;
+
+  try {
+    const res = await apiRead({ action: 'deleteEvent', eventId });
+    if (!res.success) throw new Error(res.error || 'Delete failed');
+    eventModalInst.hide();
+    await loadEvents();
+    showToast('Event deleted ✓');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+/* ── Publish / Unpublish ────────────────────────────────── */
+async function publishEvent(eventId) {
+  const ev = allEvents.find(e => e.eventId === eventId);
+  if (!ev) return;
+  if (!confirm(`Publish "${ev.title}" to Blogger?\n\nMake sure BLOGGER_BLOG_ID is set in GAS Script Properties.`)) return;
+
+  showToast('Publishing to Blogger…');
+  try {
+    const res = await apiRead({ action: 'publishEvent', eventId });
+    if (!res.success) throw new Error(res.error || 'Publish failed');
+    await loadEvents();
+    showToast('Published to Blogger ✓');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function unpublishEvent(eventId) {
+  const ev = allEvents.find(e => e.eventId === eventId);
+  if (!ev) return;
+  if (!confirm(`Unpublish "${ev.title}" from Blogger?\n\nThe post will be deleted from Blogger. The event stays here as a Draft.`)) return;
+
+  try {
+    const res = await apiRead({ action: 'unpublishEvent', eventId });
+    if (!res.success) throw new Error(res.error || 'Unpublish failed');
+    await loadEvents();
+    showToast('Unpublished — event is now a Draft ✓');
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
