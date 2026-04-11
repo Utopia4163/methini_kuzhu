@@ -259,6 +259,69 @@
     <!-- ── Settings / Admin Management Panel ── -->
     <div id="panel-set" style="display:none;">
 
+      <!-- ── Check-in Security ── -->
+      <div class="settings-card">
+        <h5 class="settings-section-title"><i class="bi bi-qr-code me-2"></i>Check-in Security</h5>
+
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.6;">
+          The printed QR code on your poster links to a landing page that issues a
+          short-lived, single-use token on each scan. That token is passed silently
+          to the check-in form — it never appears in any URL, so the link cannot be
+          bookmarked, photographed from the QR, or shared to skip in-person attendance.
+          The token expires in 2 minutes and can only be used once.
+        </p>
+
+        <!-- Toggle row -->
+        <div style="background:#1e0c08;border:1px solid #3a1a0c;border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;">
+          <div class="d-flex align-items-start justify-content-between gap-3">
+            <div>
+              <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.3rem;">
+                Require an open session before accepting check-ins
+              </div>
+              <div style="font-size:0.78rem;color:var(--muted);line-height:1.55;">
+                <strong>Off (default):</strong> The QR code works at any time — members can check in
+                whenever they scan it, day or night. Ideal for groups that run casual drop-in sessions
+                and don't need a hard start/stop window.<br>
+                <strong>On:</strong> An admin must press <em>Open Session</em> below before the first
+                member scans. Anyone who scans outside that window sees a
+                "No active session" screen and cannot submit. Use this when you want
+                attendance recorded only during a specific rehearsal window, or when you're
+                running multiple sessions in a week and want to keep them separate.
+              </div>
+            </div>
+            <div class="form-check form-switch" style="margin:0;flex-shrink:0;">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="toggle-require-session" style="width:2.5em;height:1.3em;cursor:pointer;"
+                     onchange="onSessionGateToggle(this.checked)">
+            </div>
+          </div>
+        </div>
+
+        <!-- Session open/close controls — only visible when gate is on -->
+        <div id="session-gate-controls" style="display:none;">
+          <div style="background:#1a0c08;border:1px solid #3a2010;border-radius:12px;padding:0.9rem 1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+            <div>
+              <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.2rem;">Today's session</div>
+              <div id="session-status-label" style="font-weight:700;font-size:0.9rem;">
+                <span class="badge bg-secondary">Loading…</span>
+              </div>
+            </div>
+            <div class="d-flex gap-2">
+              <button id="btn-open-session" class="btn btn-sm btn-success fw-semibold"
+                      onclick="openCheckinSession()" style="border-radius:8px;display:none;">
+                <i class="bi bi-door-open me-1"></i>Open Session
+              </button>
+              <button id="btn-close-session" class="btn btn-sm btn-outline-danger fw-semibold"
+                      onclick="closeCheckinSession()" style="border-radius:8px;display:none;">
+                <i class="bi bi-door-closed me-1"></i>Close Session
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="checkin-settings-status" style="font-size:0.8rem;color:var(--muted);margin-top:0.6rem;min-height:1.2em;"></div>
+      </div>
+
       <!-- Change Password -->
       <div class="settings-card">
         <h5 class="settings-section-title"><i class="bi bi-key me-2"></i>Change Password</h5>

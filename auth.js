@@ -114,8 +114,7 @@ async function authBoot() {
 
   // Default — show login form
   // (Invite and setup flows are handled by invite.html)
-  document.getElementById('login-form').style.display    = '';
-  document.getElementById('setup-section').style.display = 'none';
+  document.getElementById('login-form').style.display = '';
   _setLoginSub('Admin Dashboard');
 }
 
@@ -165,61 +164,6 @@ async function doLogin() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   Signup  (invite-only; bootstrap allowed when Auth sheet is empty)
-   ════════════════════════════════════════════════════════════ */
-
-async function doSetup() {
-  const name   = (document.getElementById('setup-name').value  || '').trim();
-  const email  = (document.getElementById('setup-email').value || '').trim().toLowerCase();
-  const pw     = document.getElementById('setup-pw').value;
-  const pw2    = document.getElementById('setup-pw2').value;
-  const token       = (document.getElementById('setup-invite-token').value || '').trim();
-  const setupToken  = (document.getElementById('setup-setup-token').value  || '').trim();
-  const errEl  = document.getElementById('setup-error');
-  errEl.style.display = 'none';
-
-  if (!name || !email || !pw) {
-    _setupErr('Name, email, and password are all required.'); return;
-  }
-  if (pw.length < 8) {
-    _setupErr('Password must be at least 8 characters.'); return;
-  }
-  if (pw !== pw2) {
-    _setupErr('Passwords do not match.'); return;
-  }
-
-  const btn = document.getElementById('setup-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="pk-spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></span>Creating account…';
-
-  try {
-    const salt = generateSalt();
-    const hash = await deriveKey(pw, salt);
-
-    const res = await apiRead({
-      action: 'createAdmin',
-      name, email, hash, salt,
-      iterations: 200000,
-      inviteToken: token      || undefined,
-      setupToken:  setupToken || undefined,
-      createdBy: email,
-    });
-
-    if (res.success) {
-      setSession(res.email || email, res.name || name);
-      enterAdmin(res.name || name, res.email || email);
-    } else {
-      _setupErr(res.error || 'Could not create account.');
-    }
-  } catch (e) {
-    _setupErr(e.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-check2 me-2"></i>Create Account &amp; Login';
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
    Logout
    ════════════════════════════════════════════════════════════ */
 
@@ -229,9 +173,8 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('admin-pw').value = '';
   document.getElementById('admin-email-login').value = '';
-  document.getElementById('login-error').style.display  = 'none';
-  document.getElementById('login-form').style.display   = '';
-  document.getElementById('setup-section').style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-form').style.display  = '';
   _setLoginSub('Admin Dashboard');
 }
 
@@ -307,24 +250,3 @@ function _loginErr(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
-function _setupErr(msg) {
-  const el = document.getElementById('setup-error');
-  if (el) { el.textContent = msg; el.style.display = 'block'; }
-}
-
-function _showSignupForm(inviteToken, setupToken) {
-  document.getElementById('login-form').style.display    = 'none';
-  document.getElementById('setup-section').style.display = 'block';
-  document.getElementById('setup-invite-token').value    = inviteToken || '';
-  document.getElementById('setup-setup-token').value     = setupToken  || '';
-  _setLoginSub(setupToken ? 'Create super admin account' : 'Create your admin account');
-  // Clean the token params from the URL bar without a page reload
-  window.history.replaceState({}, document.title, window.location.pathname);
-}
-
-function _showInviteError(msg) {
-  document.getElementById('login-form').style.display    = '';
-  document.getElementById('setup-section').style.display = 'none';
-  _setLoginSub('Admin Dashboard');
-  _loginErr('Invite error: ' + msg);
-}
