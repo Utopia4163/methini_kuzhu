@@ -217,14 +217,11 @@
                 <th>Name</th>
                 <th>Email</th>
                 <th>Joined</th>
-                <th>Sessions</th>
-                <th>Payments (paid / total)</th>
-                <th>Total Collected</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="mem-body">
-              <tr><td colspan="8" class="text-center py-4 text-muted">
+              <tr><td colspan="5" class="text-center py-4 text-muted">
                 <span class="pk-spinner"></span>&nbsp; Loading…
               </td></tr>
             </tbody>
@@ -473,10 +470,35 @@
           <div class="invalid-feedback">Please enter a name.</div>
         </div>
         <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-shortname">
+            SHORT NAME / NICKNAME <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <input type="text" class="form-control" id="am-shortname" placeholder="e.g. Senthil"
+                 style="border-radius:10px;" autocomplete="off">
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:0.3rem;">
+            Used in the attendance calendar grid instead of the full name.
+          </div>
+        </div>
+        <div class="mb-3">
           <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-email">EMAIL <span style="color:#c0392b">*</span></label>
           <input type="email" class="form-control" id="am-email" placeholder="email@example.com"
                  style="border-radius:10px;" autocomplete="off">
           <div class="invalid-feedback" id="am-email-feedback">Please enter a valid email.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-phone">
+            PHONE <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <input type="tel" class="form-control" id="am-phone" placeholder="e.g. 0412 345 678"
+                 style="border-radius:10px;" autocomplete="off" inputmode="tel">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;" for="am-notes">
+            NOTES <span style="font-weight:400;color:var(--muted);">(optional)</span>
+          </label>
+          <textarea class="form-control" id="am-notes" rows="2"
+                    placeholder="Any notes about this member…"
+                    style="border-radius:10px;resize:none;"></textarea>
         </div>
         <div class="mb-1">
           <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">

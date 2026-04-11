@@ -96,8 +96,9 @@ const ATT_MONTH_NAMES = [
 let _attYear        = new Date().getFullYear();
 let _attMonth       = new Date().getMonth();  // 0-based
 let _attSelected    = null;                   // null = All Members, else localId string
-let _attDayMap      = {};                     // 'dd/MM/yyyy' → [name, …]   (all-members)
+let _attDayMap      = {};                     // 'dd/MM/yyyy' → [localid, …] (all-members)
 let _memberAttDates = {};                     // localid → Set<'dd/MM/yyyy'> (individual)
+let _membersById    = {};                     // localid → member object
 let _attSelectedDay = null;
 let _attView        = 'calendar';             // 'calendar' | 'matrix'
 
@@ -167,14 +168,25 @@ async function loadLogs() {
   }
 }
 
-/* 'dd/MM/yyyy' → [name, …]  — all members (excludes voided) */
+/* 'dd/MM/yyyy' → [localid, …]  — all members (excludes voided) */
 function _buildAttDayMap() {
   _attDayMap = {};
   allLogs.forEach(l => {
     if (!l.date || l.status === 'Voided') return;
     if (!_attDayMap[l.date]) _attDayMap[l.date] = [];
-    _attDayMap[l.date].push(l.name || '?');
+    _attDayMap[l.date].push(l.localid || l.name || '?');
   });
+}
+
+/**
+ * Display name for the attendance grid.
+ * Shows shortName if set, otherwise the first word of the full name.
+ * Falls back to the localId string if the member isn't in the roster yet.
+ */
+function _displayName(localIdOrName) {
+  const m = _membersById[localIdOrName];
+  if (!m) return localIdOrName; // fallback for legacy / unmatched entries
+  return (m.shortName && m.shortName.trim()) ? m.shortName.trim() : m.name.split(' ')[0];
 }
 
 /* localid → Set<'dd/MM/yyyy'>  — per-member presence lookup (excludes voided) */
@@ -278,12 +290,12 @@ function renderAttCalendar() {
           inner += `<div class="att-count-pill"><i class="bi bi-check2"></i> Present</div>`;
         }
       } else {
-        const names = _attDayMap[key] || [];
-        hasAtt = names.length > 0;
+        const ids = _attDayMap[key] || [];
+        hasAtt = ids.length > 0;
         if (hasAtt) {
-          inner += `<div class="att-count-pill">${names.length} present</div>`;
-          const unique  = [...new Set(names)];
-          const preview = unique.slice(0, 3).map(n => esc(n)).join(', ');
+          inner += `<div class="att-count-pill">${ids.length} present</div>`;
+          const unique  = [...new Set(ids)];
+          const preview = unique.slice(0, 3).map(id => esc(_displayName(id))).join(', ');
           const more    = unique.length > 3 ? ` +${unique.length - 3}` : '';
           inner += `<div class="att-day-names">${preview}${more}</div>`;
         }
@@ -392,7 +404,12 @@ function _showAttDay(dateKey, skipScroll) {
     </div>${rows || '<div style="font-size:0.85rem;color:var(--muted);padding:0.25rem 0;">No attendance recorded.</div>'}`;
     // Mark attendance action — member dropdown
     const memberOpts = allMembers
-      .map(m => `<option value="${esc(m.localId)}" data-name="${esc(m.name)}">${esc(m.name)}</option>`)
+      .map(m => {
+        const label = (m.shortName && m.shortName.trim())
+          ? `${esc(m.shortName)} (${esc(m.name)})`
+          : esc(m.name);
+        return `<option value="${esc(m.localId)}" data-name="${esc(m.name)}">${label}</option>`;
+      })
       .join('');
     bodyHtml += `<div class="att-detail-actions">
       <select id="att-mark-member" class="att-mark-sel">
@@ -541,8 +558,10 @@ function renderAttHeatmap() {
     const isDimmed  = !!_attSelected && m.localId !== _attSelected;
     const rowCls    = isFocused ? 'hm-row-focused' : (isDimmed ? 'hm-row-dimmed' : '');
 
+    const displayName = (m.shortName && m.shortName.trim()) ? m.shortName.trim() : m.name;
+    const fullTitle   = (m.shortName && m.shortName.trim()) ? `title="${esc(m.name)}"` : '';
     return `<tr class="${rowCls}">
-      <td class="hm-name-col">${esc(m.name)}</td>
+      <td class="hm-name-col" ${fullTitle}>${esc(displayName)}</td>
       ${cells}
       <td class="hm-total-col">${memberTotal > 0 ? memberTotal : '<span style="color:#d0c8c0;font-weight:400;">0</span>'}</td>
     </tr>`;
@@ -579,52 +598,43 @@ async function loadMembers() {
   try {
     const data = await apiRead({ action: 'getMembers' });
     allMembers = data.members || [];
+    // Build fast lookup so the attendance grid can resolve localId → displayName
+    _membersById = {};
+    allMembers.forEach(m => { _membersById[m.localId] = m; });
     renderMembers();
   } catch (e) {
     document.getElementById('mem-body').innerHTML =
-      `<tr><td colspan="6" class="text-center py-3 text-danger">⚠️ ${esc(e.message)}</td></tr>`;
+      `<tr><td colspan="5" class="text-center py-3 text-danger">⚠️ ${esc(e.message)}</td></tr>`;
   }
 }
 
 function renderMembers() {
   const body = document.getElementById('mem-body');
   if (!allMembers.length) {
-    body.innerHTML = `<tr><td colspan="8">
+    body.innerHTML = `<tr><td colspan="5">
       <div class="empty-state"><span class="empty-icon">👥</span>No members yet. Use "Add Member" to add someone.</div>
     </td></tr>`;
     return;
   }
 
-  const countMap = {};
-  allLogs.forEach(l => { countMap[l.localid] = (countMap[l.localid] || 0) + 1; });
-
   body.innerHTML = allMembers.map((m, i) => {
-    const cnt        = countMap[m.localId] || 0;
-    const mContribs  = allContribsAll.filter(c => String(c.memberId) === String(m.localId) && parseInt(c.month) > 0);
-    const paidMonths = mContribs.filter(c => c.status === 'Paid');
-    const obRec      = allContribsAll.find(c => String(c.memberId) === String(m.localId) && parseInt(c.month) === 0);
-    const obAmt      = obRec ? (Number(obRec.amount) || 0) : 0;
-    const totalPaid  = obAmt + paidMonths.reduce((s, c) => s + (Number(c.amount) || 30), 0);
-    const allPaid    = mContribs.length > 0 && paidMonths.length === mContribs.length;
-
     const tagBadges   = renderTagBadges(m.tags || '');
     const escapedTags = esc(m.tags || '');
     const escapedId   = esc(m.localId);
     const escapedName = esc(m.name);
+    const shortLabel  = m.shortName ? `<span style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem;">(${esc(m.shortName)})</span>` : '';
+    const phoneHtml   = m.phone    ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:0.15rem;"><i class="bi bi-telephone me-1"></i>${esc(m.phone)}</div>` : '';
+    const notesHtml   = m.notes    ? `<div style="font-size:0.73rem;color:var(--faint);margin-top:0.15rem;font-style:italic;">${esc(m.notes)}</div>` : '';
 
     return `<tr>
       <td style="color:var(--muted);">${i+1}</td>
       <td>
-        <strong>${escapedName}</strong>
+        <strong>${escapedName}</strong>${shortLabel}
+        ${phoneHtml}${notesHtml}
         ${tagBadges ? `<div style="margin-top:0.25rem;display:flex;flex-wrap:wrap;gap:0.25rem;">${tagBadges}</div>` : ''}
       </td>
       <td>${m.email ? `<a href="mailto:${esc(m.email)}" style="color:var(--blue);font-size:0.83rem;">${esc(m.email)}</a>` : '–'}</td>
       <td style="font-size:0.83rem;color:var(--muted);">${esc(m.joinDate || '–')}</td>
-      <td><span class="badge-neutral">${cnt} session${cnt !== 1 ? 's' : ''}</span></td>
-      <td><span class="pay-pill ${allPaid && mContribs.length ? 'all-paid' : ''}">
-            ${paidMonths.length} / ${mContribs.length} months
-          </span></td>
-      <td style="font-weight:600;color:var(--green);">$${totalPaid}</td>
       <td>
         <div style="display:flex;flex-direction:column;gap:0.2rem;align-items:flex-start;">
           <button class="contrib-link-btn"
@@ -666,8 +676,11 @@ let addMemberModalInst = null;
 function openAddMemberModal() {
   if (!addMemberModalInst)
     addMemberModalInst = new bootstrap.Modal(document.getElementById('addMemberModal'));
-  document.getElementById('am-name').value  = '';
-  document.getElementById('am-email').value = '';
+  document.getElementById('am-name').value      = '';
+  document.getElementById('am-shortname').value = '';
+  document.getElementById('am-email').value     = '';
+  document.getElementById('am-phone').value     = '';
+  document.getElementById('am-notes').value     = '';
   document.getElementById('am-name').classList.remove('is-invalid');
   document.getElementById('am-email').classList.remove('is-invalid');
   _resetTagInput('am', '');
@@ -676,8 +689,11 @@ function openAddMemberModal() {
 }
 
 async function submitAddMember() {
-  const name  = document.getElementById('am-name').value.trim();
-  const email = document.getElementById('am-email').value.trim();
+  const name      = document.getElementById('am-name').value.trim();
+  const shortName = document.getElementById('am-shortname').value.trim();
+  const email     = document.getElementById('am-email').value.trim();
+  const phone     = document.getElementById('am-phone').value.trim();
+  const notes     = document.getElementById('am-notes').value.trim();
 
   let valid = true;
   if (!name) {
@@ -705,8 +721,8 @@ async function submitAddMember() {
 
   try {
     const localId = generateUUID();
-    // Use apiRead (JSONP) so we can inspect the response and catch email conflicts
-    const data = await apiRead({ action: 'registerMember', localId, name, tags, email });
+    // Use apiRead so we can inspect the response and catch email conflicts
+    const data = await apiRead({ action: 'registerMember', localId, name, shortName, email, phone, notes, tags });
 
     if (data.emailConflict) {
       // Email already in use — show inline error, leave modal open
