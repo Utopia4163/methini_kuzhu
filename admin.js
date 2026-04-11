@@ -994,8 +994,8 @@ function renderContribs() {
     if (allContribs.some(c => String(c.memberId) === String(m.localId) && c.status === 'Paid'))
       paidCount++;
   });
-  document.getElementById('s-paid').textContent   = paidCount;
-  document.getElementById('s-unpaid').textContent = allMembers.length - paidCount;
+  const sPaidEl = document.getElementById('s-paid');
+  if (sPaidEl) sPaidEl.textContent = paidCount;
 
   const monthHeaders = MONTH_ABBR.map(mo => `<th title="${mo}">${mo}</th>`).join('');
 
