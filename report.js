@@ -2,42 +2,95 @@
    report.js — Medhini Parai Kuzhu
    ─────────────────────────────────────────────────────────
    Owns:
-     • Reports tab — Attendance & Contribution yearly matrices
-     • loadReports()            (called by switchTab('rep'))
-     • renderAttendanceReport(year)
-     • renderContributionReport(year)
+     • Reports tab — single-report view with type + year dropdowns
+     • loadReports()           called by switchTab('rep')
+     • selectReport(reportId)  called by type dropdown onchange
+     • _repOnYearChange(year)  called by year dropdown onchange
+
+   Adding a new report:
+     Push one entry to _REPORTS:
+       { id: 'myreport', label: 'My Report', render: myRenderFn }
+     That's it — the dropdown and year picker update automatically.
+
    Reads globals from admin.js: allLogs, allMembers, allContribsAll
    ════════════════════════════════════════════════════════════ */
 
-const _REP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-let _repYear = new Date().getFullYear();
-let _repStylesInjected = false;
+/* ── Report Registry ─────────────────────────────────────── */
+// To add a new report: push { id, label, render } here.
+// render(year) receives the selected year as an integer
+// and should write HTML into document.getElementById('rep-body').
+const _REPORTS = [
+  { id: 'attendance',   label: 'Attendance Report',   render: renderAttendanceReport   },
+  { id: 'contribution', label: 'Contribution Report', render: renderContributionReport },
+];
+
+/* ── State ───────────────────────────────────────────────── */
+const _REP_MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let   _repYear         = new Date().getFullYear();
+let   _repActiveId     = _REPORTS[0].id;
+let   _repStylesDone   = false;
 
 /* ════════════════════════════════════════════════════════════
-   Entry point — called by switchTab('rep')
+   Entry point
    ════════════════════════════════════════════════════════════ */
 
 function loadReports() {
   _injectReportStyles();
-  _populateReportYearDropdowns();
-  renderAttendanceReport(_repYear);
-  renderContributionReport(_repYear);
+  _populateYearDropdown();
+  _populateTypeDropdown();
+  selectReport(_repActiveId);
 }
 
 /* ════════════════════════════════════════════════════════════
-   Year dropdowns
+   Public dispatcher — called by type dropdown & internally
    ════════════════════════════════════════════════════════════ */
 
-function _populateReportYearDropdowns() {
+function selectReport(reportId) {
+  _repActiveId = reportId;
+  // Keep type dropdown in sync (in case called programmatically)
+  const typeSel = document.getElementById('rep-type-sel');
+  if (typeSel) typeSel.value = reportId;
+
+  const rep = _REPORTS.find(r => r.id === reportId);
+  if (rep) {
+    rep.render(_repYear);
+  } else {
+    const body = document.getElementById('rep-body');
+    if (body) body.innerHTML = '<div class="text-muted p-3">Unknown report.</div>';
+  }
+}
+
+/* ── Year change handler (year dropdown onchange) ─────────── */
+function _repOnYearChange(year) {
+  _repYear = parseInt(year);
+  selectReport(_repActiveId);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Dropdown helpers
+   ════════════════════════════════════════════════════════════ */
+
+function _populateTypeDropdown() {
+  const sel = document.getElementById('rep-type-sel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  _REPORTS.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = r.label;
+    if (r.id === _repActiveId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function _populateYearDropdown() {
   const years = new Set();
 
-  // Collect years from attendance logs
   (allLogs || []).forEach(log => {
     const d = _parseLogDate(log.date);
     if (d) years.add(d.getFullYear());
   });
 
-  // Collect years from contributions (skip legacy year=0)
   (allContribsAll || []).forEach(c => {
     const y = parseInt(c.year);
     if (y > 0) years.add(y);
@@ -49,17 +102,15 @@ function _populateReportYearDropdowns() {
   const sorted = [...years].sort((a, b) => b - a); // newest first
   _repYear = sorted.includes(current) ? current : sorted[0];
 
-  ['att-report-year', 'con-report-year'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    sel.innerHTML = '';
-    sorted.forEach(y => {
-      const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
-      if (y === _repYear) opt.selected = true;
-      sel.appendChild(opt);
-    });
+  const sel = document.getElementById('rep-year-sel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  sorted.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    if (y === _repYear) opt.selected = true;
+    sel.appendChild(opt);
   });
 }
 
@@ -69,23 +120,20 @@ function _populateReportYearDropdowns() {
 
 function renderAttendanceReport(year) {
   year = parseInt(year);
-  _repYear = year;
-  const body = document.getElementById('att-report-body');
+  const body = document.getElementById('rep-body');
   if (!body) return;
 
-  // Build per-member, per-month count map
-  const counts = {}; // localid → [0..11]
+  // Build per-member, per-month count  { localid: [0..11] }
+  const counts = {};
   (allLogs || []).forEach(log => {
     if (log.status === 'Voided') return;
     const d = _parseLogDate(log.date);
     if (!d || d.getFullYear() !== year) return;
-    const m0 = d.getMonth();
     const id = log.localid;
     if (!counts[id]) counts[id] = new Array(12).fill(0);
-    counts[id][m0]++;
+    counts[id][d.getMonth()]++;
   });
 
-  // All members sorted by name
   const members = [...(allMembers || [])].sort((a, b) =>
     (a.name || '').localeCompare(b.name || '')
   );
@@ -95,7 +143,7 @@ function renderAttendanceReport(year) {
     return;
   }
 
-  let html = `<table class="report-matrix-table">
+  let html = `<div class="pk-table-wrap"><table class="report-matrix-table">
     <thead><tr>
       <th>Name</th>
       ${_REP_MONTHS.map(m => `<th>${m}</th>`).join('')}
@@ -104,21 +152,16 @@ function renderAttendanceReport(year) {
     <tbody>`;
 
   members.forEach(m => {
-    const mc = counts[m.localid] || new Array(12).fill(0);
+    const mc    = counts[m.localid] || new Array(12).fill(0);
     const total = mc.reduce((s, v) => s + v, 0);
-    const cells = mc.map(c =>
-      c > 0
-        ? `<td class="rep-present">${c}</td>`
-        : `<td class="rep-absent">—</td>`
-    ).join('');
     html += `<tr>
       <td>${_esc(m.name || m.localid)}</td>
-      ${cells}
+      ${mc.map(c => c > 0 ? `<td class="rep-present">${c}</td>` : `<td class="rep-absent">—</td>`).join('')}
       <td class="rep-total">${total || '—'}</td>
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
 }
 
@@ -128,10 +171,10 @@ function renderAttendanceReport(year) {
 
 function renderContributionReport(year) {
   year = parseInt(year);
-  const body = document.getElementById('con-report-body');
+  const body = document.getElementById('rep-body');
   if (!body) return;
 
-  // Build per-member, per-month map  { memberId: { month0: {amount, status} } }
+  // Build  { memberId: { month0: {amount, status} } }
   const contribs = {};
   (allContribsAll || []).forEach(c => {
     if (parseInt(c.year) !== year) return;
@@ -151,7 +194,7 @@ function renderContributionReport(year) {
     return;
   }
 
-  let html = `<table class="report-matrix-table">
+  let html = `<div class="pk-table-wrap"><table class="report-matrix-table">
     <thead><tr>
       <th>Name</th>
       ${_REP_MONTHS.map(m => `<th>${m}</th>`).join('')}
@@ -167,7 +210,7 @@ function renderContributionReport(year) {
       if (!c) return `<td class="rep-void">—</td>`;
       if (c.status === 'Paid') {
         totalPaid += c.amount;
-        return `<td class="rep-paid">$${c.amount % 1 === 0 ? c.amount : c.amount.toFixed(2)}</td>`;
+        return `<td class="rep-paid">$${_fmt(c.amount)}</td>`;
       }
       if (c.status === 'Unpaid') return `<td class="rep-unpaid">Unpaid</td>`;
       return `<td class="rep-void">${_esc(c.status) || '—'}</td>`;
@@ -175,11 +218,11 @@ function renderContributionReport(year) {
     html += `<tr>
       <td>${_esc(m.name || m.localid)}</td>
       ${cells}
-      <td class="rep-total">${totalPaid > 0 ? '$' + (totalPaid % 1 === 0 ? totalPaid : totalPaid.toFixed(2)) : '—'}</td>
+      <td class="rep-total">${totalPaid > 0 ? '$' + _fmt(totalPaid) : '—'}</td>
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
 }
 
@@ -188,13 +231,16 @@ function renderContributionReport(year) {
    ════════════════════════════════════════════════════════════ */
 
 function _parseLogDate(dateStr) {
-  // Expected format: dd/MM/yyyy
   if (!dateStr) return null;
   const parts = dateStr.split('/');
   if (parts.length !== 3) return null;
   const [d, mo, y] = parts.map(Number);
   if (!d || !mo || !y) return null;
   return new Date(y, mo - 1, d);
+}
+
+function _fmt(n) {
+  return n % 1 === 0 ? String(n) : n.toFixed(2);
 }
 
 function _esc(str) {
@@ -206,8 +252,8 @@ function _esc(str) {
 }
 
 function _injectReportStyles() {
-  if (_repStylesInjected) return;
-  _repStylesInjected = true;
+  if (_repStylesDone) return;
+  _repStylesDone = true;
   const style = document.createElement('style');
   style.textContent = `
     .report-matrix-table {
