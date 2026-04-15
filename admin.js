@@ -77,7 +77,7 @@ async function loadContribLog() {
 
 /* ── Tabs ── */
 function switchTab(id) {
-  ['att','mem','con','exp','evt','set','rep'].forEach(t => {
+  ['att','mem','con','exp','evt','set','rep','nts'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t === id);
     document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
   });
@@ -85,6 +85,7 @@ function switchTab(id) {
   if (id === 'exp') loadExpenses();
   if (id === 'evt') loadEvents();
   if (id === 'rep') loadReports();
+  if (id === 'nts') loadNotes();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -2454,6 +2455,264 @@ async function unpublishEvent(eventId) {
     if (!res.success) throw new Error(res.error || 'Unpublish failed');
     await loadEvents();
     showToast('Unpublished — event is now a Draft ✓');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Notes — Admin Notes & References
+   ════════════════════════════════════════════════════════════ */
+
+let allNotes      = [];
+let noteModalInst = null;
+let _ntsAtts      = []; // attachment URLs being edited in the open modal
+
+/* ── Load & Render ──────────────────────────────────────── */
+
+async function loadNotes() {
+  const container = document.getElementById('nts-list');
+  container.innerHTML = `<div class="text-center py-5 text-muted"><span class="pk-spinner"></span>&nbsp; Loading…</div>`;
+  try {
+    const data = await apiRead({ action: 'getNotes' });
+    allNotes = data.notes || [];
+    renderNotes();
+  } catch (e) {
+    container.innerHTML = `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+function renderNotes() {
+  const container = document.getElementById('nts-list');
+  if (!allNotes.length) {
+    container.innerHTML = `<div class="text-center py-5 text-muted">
+      <i class="bi bi-journal-x" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
+      No notes yet. Click <strong>Add Note</strong> to get started.
+    </div>`;
+    return;
+  }
+
+  const cards = allNotes.map(n => {
+    const tags = (n.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+    const tagHtml = tags.map(t =>
+      `<span style="display:inline-block;padding:0.15em 0.55em;background:#eef2ff;color:#4f46e5;border-radius:20px;font-size:0.72rem;margin:0.15rem 0.15rem 0 0;">${esc(t)}</span>`
+    ).join('');
+
+    // Plain-text preview: strip markdown syntax
+    const preview = _ntsStripMarkdown(n.content || '').slice(0, 120);
+    const previewHtml = preview ? `<div style="font-size:0.82rem;color:var(--muted);margin-top:0.3rem;line-height:1.5;">${esc(preview)}${n.content && n.content.length > 120 ? '…' : ''}</div>` : '';
+
+    const attCount  = (n.attachments || '').split(',').filter(s => s.trim()).length;
+    const linkCount = (n.links || '').split('\n').filter(s => s.trim()).length;
+    const badges = [
+      attCount  ? `<span class="badge bg-secondary" style="font-size:0.7rem;"><i class="bi bi-paperclip me-1"></i>${attCount}</span>` : '',
+      linkCount ? `<span class="badge bg-secondary" style="font-size:0.7rem;"><i class="bi bi-link-45deg me-1"></i>${linkCount}</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    return `<div class="nts-card" onclick="_ntsToggleExpand('${esc(n.noteId)}')" style="cursor:pointer;">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div style="flex:1;min-width:0;">
+          <div class="fw-bold" style="font-size:0.95rem;">${esc(n.title)}</div>
+          ${previewHtml}
+          <div style="margin-top:0.4rem;">${tagHtml}${badges ? '<span style="margin-left:0.25rem;">'+badges+'</span>' : ''}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" style="border-radius:8px;flex-shrink:0;"
+                onclick="event.stopPropagation();openNoteModal('${esc(n.noteId)}')">
+          <i class="bi bi-pencil"></i>
+        </button>
+      </div>
+      <div class="nts-expanded" id="nts-exp-${esc(n.noteId)}" style="display:none;"></div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="nts-list-inner">${cards}</div>`;
+}
+
+function _ntsToggleExpand(noteId) {
+  const el = document.getElementById('nts-exp-' + noteId);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  if (isOpen) { el.style.display = 'none'; return; }
+
+  const note = allNotes.find(n => n.noteId === noteId);
+  if (!note) return;
+
+  // Render markdown
+  const contentHtml = note.content
+    ? marked.parse(note.content)
+    : '<em style="color:var(--muted);">No content.</em>';
+
+  // Links
+  const links = (note.links || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const linksHtml = links.length
+    ? `<div style="margin-top:0.75rem;"><strong style="font-size:0.8rem;color:var(--muted);">LINKS</strong><ul style="margin:0.25rem 0 0 0;padding-left:1.2rem;">${
+        links.map(u => `<li><a href="${esc(u)}" target="_blank" rel="noopener" style="font-size:0.85rem;">${esc(u)}</a></li>`).join('')
+      }</ul></div>` : '';
+
+  // Attachments
+  const atts = (note.attachments || '').split(',').map(s => s.trim()).filter(Boolean);
+  const attsHtml = atts.length
+    ? `<div style="margin-top:0.75rem;"><strong style="font-size:0.8rem;color:var(--muted);">ATTACHMENTS</strong><div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.25rem;">${
+        atts.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"
+          style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.6rem;background:#f3f4f6;border-radius:8px;font-size:0.8rem;color:#374151;text-decoration:none;">
+          <i class="bi bi-file-earmark-pdf text-danger"></i> Drive file</a>`).join('')
+      }</div></div>` : '';
+
+  el.innerHTML = `<div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border,#e5e7eb);">
+    <div class="nts-md-body">${contentHtml}</div>
+    ${linksHtml}${attsHtml}
+  </div>`;
+  el.style.display = '';
+}
+
+function _ntsStripMarkdown(text) {
+  return text
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/\n+/g, ' ')
+    .trim();
+}
+
+/* ── Add / Edit Modal ───────────────────────────────────── */
+
+function openNoteModal(noteId) {
+  if (!noteModalInst) noteModalInst = new bootstrap.Modal(document.getElementById('notesModal'));
+
+  const isEdit = !!noteId;
+  document.getElementById('nts-modal-title').innerHTML =
+    `<i class="bi bi-journal-text me-2"></i>${isEdit ? 'Edit Note' : 'Add Note'}`;
+  document.getElementById('nts-delete-btn').style.display = isEdit ? '' : 'none';
+  document.getElementById('nts-att-error').style.display  = 'none';
+
+  if (isEdit) {
+    const n = allNotes.find(x => x.noteId === noteId);
+    if (!n) return;
+    document.getElementById('nts-id').value      = n.noteId;
+    document.getElementById('nts-title').value   = n.title;
+    document.getElementById('nts-content').value = n.content;
+    document.getElementById('nts-tags').value    = n.tags;
+    document.getElementById('nts-links').value   = (n.links || '').split(',').map(s => s.trim()).filter(Boolean).join('\n');
+    _ntsAtts = (n.attachments || '').split(',').map(s => s.trim()).filter(Boolean);
+  } else {
+    document.getElementById('nts-id').value      = '';
+    document.getElementById('nts-title').value   = '';
+    document.getElementById('nts-content').value = '';
+    document.getElementById('nts-tags').value    = '';
+    document.getElementById('nts-links').value   = '';
+    _ntsAtts = [];
+  }
+  _ntsRenderAttachments();
+  noteModalInst.show();
+}
+
+/* ── Attachment helpers ─────────────────────────────────── */
+
+function _ntsAddAttachment() {
+  const input  = document.getElementById('nts-att-input');
+  const errEl  = document.getElementById('nts-att-error');
+  const url    = (input.value || '').trim();
+  errEl.style.display = 'none';
+
+  if (!url) return;
+
+  if (!url.startsWith('https://drive.google.com') && !url.startsWith('https://docs.google.com')) {
+    errEl.textContent   = 'Only Google Drive or Google Docs links are allowed.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (_ntsAtts.length >= 3) {
+    errEl.textContent   = 'Maximum 3 attachments per note.';
+    errEl.style.display = 'block';
+    return;
+  }
+  _ntsAtts.push(url);
+  input.value = '';
+  _ntsRenderAttachments();
+}
+
+function _ntsRemoveAttachment(idx) {
+  _ntsAtts.splice(idx, 1);
+  _ntsRenderAttachments();
+  document.getElementById('nts-att-error').style.display = 'none';
+}
+
+function _ntsRenderAttachments() {
+  const container = document.getElementById('nts-att-list');
+  if (!_ntsAtts.length) { container.innerHTML = ''; return; }
+  container.innerHTML = _ntsAtts.map((url, i) => {
+    const label = url.replace(/^https?:\/\/(drive|docs)\.google\.com\//, '').slice(0, 40) + '…';
+    return `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:#f3f4f6;border-radius:8px;font-size:0.78rem;color:#374151;">
+      <i class="bi bi-file-earmark-pdf text-danger"></i>
+      <span title="${esc(url)}">${esc(label)}</span>
+      <button type="button" onclick="_ntsRemoveAttachment(${i})"
+              style="background:none;border:none;padding:0;line-height:1;cursor:pointer;color:#6b7280;">×</button>
+    </span>`;
+  }).join('');
+}
+
+/* ── Save ───────────────────────────────────────────────── */
+
+async function submitNote() {
+  const noteId  = document.getElementById('nts-id').value.trim();
+  const title   = document.getElementById('nts-title').value.trim();
+  const content = document.getElementById('nts-content').value.trim();
+  const tags    = document.getElementById('nts-tags').value.trim();
+  const linksRaw = document.getElementById('nts-links').value.trim();
+
+  if (!title) { showToast('Title is required.', 'error'); return; }
+
+  // Normalise links: split by newline or comma, rejoin as comma-separated
+  const links = linksRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(',');
+
+  const btn = document.getElementById('nts-save-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const action  = noteId ? 'updateNote' : 'addNote';
+    const session = getSession();
+    const payload = {
+      action,
+      title,
+      content,
+      tags,
+      links,
+      attachments: _ntsAtts.join(','),
+      changedBy:   session?.name || 'Admin',
+    };
+    if (noteId) payload.noteId = noteId;
+
+    const res = await apiRead(payload);
+    if (!res.success) throw new Error(res.error || 'Save failed');
+
+    noteModalInst.hide();
+    await loadNotes();
+    showToast(noteId ? 'Note updated ✓' : 'Note saved ✓');
+  } catch (err) {
+    showToast(err.message || 'Could not save — try again.', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Save';
+  }
+}
+
+/* ── Delete ─────────────────────────────────────────────── */
+
+async function confirmDeleteNote() {
+  const noteId = document.getElementById('nts-id').value.trim();
+  const title  = document.getElementById('nts-title').value.trim();
+  if (!confirm(`Delete "${title}"?\n\nThis cannot be undone.`)) return;
+
+  try {
+    const res = await apiRead({ action: 'deleteNote', noteId });
+    if (!res.success) throw new Error(res.error || 'Delete failed');
+    noteModalInst.hide();
+    await loadNotes();
+    showToast('Note deleted ✓');
   } catch (err) {
     showToast(err.message, 'error');
   }

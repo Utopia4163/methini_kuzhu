@@ -8,6 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="./admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 </head>
 <body>
 
@@ -104,6 +105,9 @@
       </button>
       <button class="pk-tab" id="tab-rep" onclick="switchTab('rep')">
         <i class="bi bi-bar-chart-line"></i> Reports
+      </button>
+      <button class="pk-tab" id="tab-nts" onclick="switchTab('nts')">
+        <i class="bi bi-journal-text"></i> Notes
       </button>
     </div>
 
@@ -486,6 +490,24 @@
       </div>
 
     </div><!-- /panel-evt -->
+
+    <!-- ── Notes Panel ── -->
+    <div id="panel-nts" style="display:none">
+      <div class="pk-card mt-3">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-journal-text me-2"></i>Notes</h5>
+          <button class="btn btn-primary btn-sm fw-bold" onclick="openNoteModal()"
+                  style="border-radius:8px;">
+            <i class="bi bi-plus-lg me-1"></i>Add Note
+          </button>
+        </div>
+        <div id="nts-list">
+          <div class="text-center py-5 text-muted">
+            <span class="pk-spinner"></span>&nbsp; Loading…
+          </div>
+        </div>
+      </div>
+    </div><!-- /panel-nts -->
 
     <!-- ── Reports Panel ── -->
     <div id="panel-rep" style="display:none">
@@ -965,6 +987,104 @@
   </div>
 </div>
 
+
+<style>
+  /* Notes card list */
+  .nts-card {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    margin-bottom: 0.6rem;
+    transition: box-shadow 0.15s;
+    background: #fff;
+  }
+  .nts-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+  /* Markdown body styling inside expanded note */
+  .nts-md-body { font-size: 0.88rem; line-height: 1.7; color: var(--text, #1f2937); }
+  .nts-md-body h1,.nts-md-body h2,.nts-md-body h3 { margin-top: 0.75rem; margin-bottom: 0.25rem; font-size: 1rem; font-weight: 700; }
+  .nts-md-body p  { margin-bottom: 0.5rem; }
+  .nts-md-body ul,.nts-md-body ol { padding-left: 1.4rem; margin-bottom: 0.5rem; }
+  .nts-md-body li { margin-bottom: 0.2rem; }
+  .nts-md-body a  { color: var(--pk-primary, #3a7bd5); }
+  .nts-md-body code { background: #f3f4f6; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.82rem; }
+  .nts-md-body pre { background: #f3f4f6; padding: 0.75rem; border-radius: 8px; overflow-x: auto; }
+  .nts-md-body blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75rem; color: #6b7280; margin: 0.5rem 0; }
+</style>
+
+<!-- ══ NOTES MODAL ════════════════════════════════════════════ -->
+<div class="modal fade ck-modal" id="notesModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:600px;">
+    <div class="modal-content">
+      <div class="modal-header px-4 pt-4 pb-3">
+        <h5 class="modal-title fw-bold" id="nts-modal-title">
+          <i class="bi bi-journal-text me-2"></i>Add Note
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <input type="hidden" id="nts-id">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">TITLE <span style="color:var(--danger,#dc3545);">*</span></label>
+          <input type="text" class="form-control" id="nts-title"
+                 placeholder="e.g. Thalavattam — E flat" style="border-radius:10px;" autocomplete="off">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">CONTENT</label>
+          <textarea class="form-control" id="nts-content" rows="8"
+                    placeholder="Supports **bold**, *italic*, # Heading, - lists, [link text](url)"
+                    style="border-radius:10px;font-size:0.85rem;font-family:monospace;"></textarea>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.3rem;">Markdown supported. Preview appears on the card.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">TAGS</label>
+          <input type="text" class="form-control" id="nts-tags"
+                 placeholder="e.g. musical, thalavattam, beginner" style="border-radius:10px;" autocomplete="off">
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.3rem;">Comma-separated.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">EXTERNAL LINKS</label>
+          <textarea class="form-control" id="nts-links" rows="2"
+                    placeholder="https://youtu.be/... (one link per line)"
+                    style="border-radius:10px;font-size:0.85rem;"></textarea>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.3rem;">Inspiration or reference links — one per line.</div>
+        </div>
+
+        <div class="mb-1">
+          <label class="form-label fw-semibold text-muted" style="font-size:0.82rem;">GOOGLE DRIVE ATTACHMENTS <span style="font-weight:400;">(max 3)</span></label>
+          <div class="d-flex gap-2 mb-2">
+            <input type="text" class="form-control" id="nts-att-input"
+                   placeholder="Paste Google Drive share link…" style="border-radius:10px;font-size:0.85rem;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();_ntsAddAttachment();}">
+            <button class="btn btn-outline-secondary btn-sm" onclick="_ntsAddAttachment()"
+                    style="border-radius:8px;white-space:nowrap;">+ Add</button>
+          </div>
+          <div id="nts-att-error" style="font-size:0.78rem;color:var(--danger,#dc3545);display:none;margin-bottom:0.4rem;"></div>
+          <div id="nts-att-list" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem;">Google Drive or Google Docs links only. File stays in Drive — only the link is stored.</div>
+        </div>
+      </div>
+
+      <div class="modal-footer px-4 pb-4 pt-3 d-flex justify-content-between">
+        <button class="btn btn-outline-danger btn-sm" id="nts-delete-btn"
+                onclick="confirmDeleteNote()" style="display:none;border-radius:8px;">
+          <i class="bi bi-trash3"></i> Delete
+        </button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Cancel</button>
+          <button class="btn btn-success fw-bold" id="nts-save-btn" onclick="submitNote()"
+                  style="border-radius:10px;min-width:100px;">
+            <i class="bi bi-check2 me-1"></i>Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="./auth.js"></script>   <!-- must load before admin.js (defines apiRead, session) -->
