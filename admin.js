@@ -963,8 +963,6 @@ async function loadContribs() {
     const data  = await apiRead({ action: 'getContributions', year });
     allContribs = data.contributions || [];
     renderContribs();
-    // After rendering, check if carry-forward is needed for this year
-    await checkAndCarryForward(year);
   } catch (e) {
     document.getElementById('contrib-container').innerHTML =
       `<div class="text-center py-4 text-danger">⚠️ ${esc(e.message)}</div>`;
@@ -1125,16 +1123,16 @@ function openContribModal(memberId, memberName, month, year) {
   document.getElementById('cm-btn-unpaid').style.display = hasRecord ? '' : 'none';
 
   document.getElementById('cm-notes-label').innerHTML = isOB
-    ? `NOTES <span style="font-weight:400;color:var(--muted);">(describe what this OB covers, e.g. balance from ${iYear - 1})</span>`
+    ? `NOTES <span style="font-weight:400;color:var(--muted);">(optional — describe what this opening balance covers)</span>`
     : 'NOTES <span style="font-weight:400;color:var(--muted);">(payment method, ref, or months covered)</span>';
   document.getElementById('cm-notes').placeholder = isOB
-    ? `e.g. Carried forward from ${iYear - 1}`
+    ? `e.g. Balance as at end of ${iYear - 1}`
     : 'e.g. Bank transfer ref #123, covers Feb + March';
 
   document.getElementById('cm-amount').previousElementSibling.innerHTML =
     isOB ? `OPENING BALANCE ${iYear} ($)` : 'AMOUNT RECEIVED ($)';
   document.getElementById('cm-amount').nextElementSibling.textContent = isOB
-    ? `Opening balance for the ${iYear} year. Editing this will override the auto-calculated carry-forward.`
+    ? `Must match previous year closing total (prior Opening Balance + prior year Monthly Contributions).`
     : 'Default $30/month. Enter higher amount for catch-up payments (e.g. $60 for 2 months).';
 
   // Strip auto-carry flag from notes display so admin sees clean value
@@ -1204,11 +1202,6 @@ async function submitContribChange() {
     await loadContribs();
 
     showToast(isOB ? `Opening balance ${year} saved for ${memberName} ✓` : `${memberName} — ${finalStatus} ✓`);
-
-    // If a contribution was edited in a past year, reconcile carry-forwards in subsequent years
-    if (!isOB) {
-      reconcileSubsequentOBs(year);
-    }
   } catch (e) {
     showToast(`Save failed: ${e.message}`, 'error');
   } finally {
