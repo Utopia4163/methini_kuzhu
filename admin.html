@@ -102,6 +102,9 @@
       <button class="pk-tab" id="tab-set" onclick="switchTab('set')">
         <i class="bi bi-shield-lock"></i> Admin
       </button>
+      <button class="pk-tab" id="tab-rep" onclick="switchTab('rep')">
+        <i class="bi bi-bar-chart-line"></i> Reports
+      </button>
     </div>
 
     <!-- ── Attendance Panel ── -->
@@ -942,8 +945,40 @@
   </div>
 </div>
 
+<!-- ── Reports Panel ── -->
+<div id="panel-rep" style="display:none">
+  <div class="pk-card mt-3">
+
+    <!-- Attendance Report -->
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h5 class="mb-0 fw-bold">Attendance Report</h5>
+      <select class="form-select form-select-sm" id="att-report-year"
+              onchange="renderAttendanceReport(this.value)"
+              style="width:auto;border-radius:8px;"></select>
+    </div>
+    <div class="pk-table-wrap" id="att-report-body">
+      <div class="text-muted p-3">Loading…</div>
+    </div>
+
+    <hr class="my-4">
+
+    <!-- Contribution Report -->
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h5 class="mb-0 fw-bold">Contribution Report</h5>
+      <select class="form-select form-select-sm" id="con-report-year"
+              onchange="renderContributionReport(this.value)"
+              style="width:auto;border-radius:8px;"></select>
+    </div>
+    <div class="pk-table-wrap" id="con-report-body">
+      <div class="text-muted p-3">Loading…</div>
+    </div>
+
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="./auth.js"></script>   <!-- must load before admin.js (defines apiRead, session) -->
 <script src="./admin.js"></script>
+<script src="./report.js"></script>
 </body>
 </html>

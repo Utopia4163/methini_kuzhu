@@ -77,13 +77,14 @@ async function loadContribLog() {
 
 /* ── Tabs ── */
 function switchTab(id) {
-  ['att','mem','con','exp','evt','set'].forEach(t => {
+  ['att','mem','con','exp','evt','set','rep'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t === id);
     document.getElementById('panel-'+t).style.display = t === id ? 'block' : 'none';
   });
   if (id === 'set') loadSettingsTab();
   if (id === 'exp') loadExpenses();
   if (id === 'evt') loadEvents();
+  if (id === 'rep') loadReports();
 }
 
 /* ════════════════════════════════════════════════════════════
