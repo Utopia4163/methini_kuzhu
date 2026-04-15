@@ -1131,15 +1131,52 @@ function openContribModal(memberId, memberName, month, year) {
 
   document.getElementById('cm-amount').previousElementSibling.innerHTML =
     isOB ? `OPENING BALANCE ${iYear} ($)` : 'AMOUNT RECEIVED ($)';
-  document.getElementById('cm-amount').nextElementSibling.textContent = isOB
-    ? `Must match previous year closing total (prior Opening Balance + prior year Monthly Contributions).`
-    : 'Default $30/month. Enter higher amount for catch-up payments (e.g. $60 for 2 months).';
 
   // Strip auto-carry flag from notes display so admin sees clean value
   const rawNotes = hasRecord ? (existing.notes || '') : '';
   const displayNotes = rawNotes.replace(/^\[auto:\d{4}\]\s*/, '');
-  document.getElementById('cm-notes').value  = displayNotes;
-  document.getElementById('cm-amount').value = hasRecord ? (existing.amount || (isOB ? 0 : 30)) : (isOB ? 0 : 30);
+  document.getElementById('cm-notes').value = displayNotes;
+
+  if (isOB) {
+    // Compute expected OB from prior year's closing total (year-specific OBs only — no legacy year=0)
+    const priorYear   = iYear - 1;
+    const priorOBRow  = allContribsAll.find(c =>
+      String(c.memberId) === String(memberId) &&
+      parseInt(c.month) === 0 &&
+      parseInt(c.year)  === priorYear
+    );
+    if (priorOBRow) {
+      const priorOBAmt       = parseFloat(priorOBRow.amount) || 0;
+      const priorMonthlyPaid = allContribsAll
+        .filter(c =>
+          String(c.memberId) === String(memberId) &&
+          parseInt(c.year)   === priorYear        &&
+          parseInt(c.month)  >= 1                 &&
+          parseInt(c.month)  <= 12                &&
+          c.status === 'Paid'
+        )
+        .reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+      const expectedOB = priorOBAmt + priorMonthlyPaid;
+
+      document.getElementById('cm-amount').nextElementSibling.textContent =
+        `Required: $${expectedOB.toFixed(2)} ` +
+        `(${priorYear} Opening Balance $${priorOBAmt.toFixed(2)} + ` +
+        `Monthly Contributions $${priorMonthlyPaid.toFixed(2)})`;
+
+      // Pre-fill with the expected amount so admin doesn't have to calculate it
+      document.getElementById('cm-amount').value = hasRecord
+        ? (parseFloat(existing.amount) ?? expectedOB)
+        : expectedOB;
+    } else {
+      document.getElementById('cm-amount').nextElementSibling.textContent =
+        `No prior year opening balance found for ${priorYear} — enter the opening balance manually.`;
+      document.getElementById('cm-amount').value = hasRecord ? (parseFloat(existing.amount) || 0) : 0;
+    }
+  } else {
+    document.getElementById('cm-amount').nextElementSibling.textContent =
+      'Default $30/month. Enter higher amount for catch-up payments (e.g. $60 for 2 months).';
+    document.getElementById('cm-amount').value = hasRecord ? (existing.amount || 30) : 30;
+  }
 
   const sess  = getSession();
   const name  = sess?.name  || '';
